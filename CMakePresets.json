@@ -1,0 +1,13 @@
+﻿{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25
+  },
+  "include": [
+    "cmake_config/presets/ClangLinuxPresets.json",
+    "cmake_config/presets/GCCLinuxPresets.json",
+    "cmake_config/presets/ClangWindowsPresets.json",
+    "cmake_config/presets/MSVCWindowsPresets.json"
+  ]
+}
