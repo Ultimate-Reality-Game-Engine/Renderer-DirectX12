@@ -8,9 +8,6 @@ cmake_minimum_required (VERSION 3.25)
 
 project(RENDERER_DIRECTX12 VERSION 1.0.0)
 
-set(RENDERER_DIRECTX12_VERSION ${PROJECT_VERSION})
-set(RENDERER_DIRECTX12_VERSION_MAJOR ${PROJECT_VERION_MAJOR})
-
 enable_testing()
 
 # Enable Hot Reload for MSVC compilers if supported.
@@ -23,14 +20,27 @@ endif()
 # setting minimum c++ version to 20
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Make sure CMake exports its compile commands so things like IntelliSense can detect them in editor
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Define custom configuration types for Debug, Release, and Release-Dev
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release;RelWithDebInfo" CACHE STRING "List of supported build modes." FORCE)
+
+# Define compiler definitions to create OS specific code segments
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+	add_compile_definitions(TARGET_OS=Windows _WIN_TARGET)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	add_compile_definitions(TARGET_OS=Linux _LINUX_TARGET)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin") #MacOS
+	add_compile_definitions(TARGET_OS=MacOS _MACOS_TARGET)
+endif()
+
+# Ensure that the target OS is Windows
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
+	message(FATAL_ERROR "The DirectX12Renderer can only be built to target Windows")
+endif()
+
+# Make sure CMake exports its compile commands so things like IntelliSense can detect them in editor
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # End CMake configuration and settings ************************************************************
 #**************************************************************************************************
@@ -78,9 +88,11 @@ generate_from_template(${CONFIG_TEMPLATES_DIR}/src ${GENERATED_SRC_DIR} cpp)
 find_path(DirectX12_INCLUDE_DIR "d3d12.h")
 find_library(DirectX12_LIB d3d12)
 
+#[[
 # DirectX Shader Compiler (for HLSL) setup
 find_path(DXC_INCLUDE_DIR "dxcapi.h")
 find_library(DXC_LIB dxc)
+]]
 
 # DirectX Graphics Infastructure setup
 find_library(DXGI_LIB dxgi)
@@ -93,37 +105,41 @@ FetchContent_Declare(
 	GIT_REPOSITORY https://github.com/Ultimate-Reality-Game-Engine/Renderer-Interface.git 
 	GIT_TAG latest
 )
-
-# Get the RendererInterface source directory
-FetchContent_GetProperties(RendererInterface)
-if(NOT RendererInterface_POPULATED)
-	message(FATAL_ERROR "Failed to fetch RendererInterface")
-endif()
-
 FetchContent_MakeAvailable(RendererInterface)
 
-# Create CMake reference to this source directory, can be used in CMake files that include this target
-set(Renderer_DirectX12_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-
 # Create list of all source files to be used in this target
-file(GLOB_RECURSE Renderer_DirectX12_SOURCE "${Renderer_DirectX12_SOURCE_DIR}/src/*.cpp")
+file(GLOB_RECURSE DirectX12Renderer_SOURCE "${CMAKE_SOURCE_DIR}/src/*.cpp")
 
-if(Renderer_DirectX12_SOURCE)
+if(DirectX12Renderer_SOURCE)
 # Add DirectX12 Renderer library target
-add_library(DirectX12Renderer SHARED ${Renderer_DirectX12_SOURCE})
+add_library(DirectX12Renderer SHARED ${DirectX12Renderer_SOURCE})
 
 # Connect the Renderers headers to the library
-target_include_directories(DirectX12Renderer PUBLIC ${Renderer_DirectX12_SOURCE_DIR}/include)
+target_include_directories(DirectX12Renderer PUBLIC 
+	$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include> 
+ 	$<INSTALL_INTERFACE:include> # This is used when the library is installed
+)
 
 # Connect the DirectX headers to the library
-target_include_directories(DirectX12Renderer PRIVATE ${DirectX12_INCLUDE_DIR} ${DXC_INCLUDE_DIR} ${RendererInterface_SOURCE_DIR}/include)
+target_include_directories(DirectX12Renderer PRIVATE ${DirectX12_INCLUDE_DIR})
 
 # Link the DirectX12, DXC, and DXGI libraries to the target
-target_link_libraries(DirectX12Renderer PRIVATE RendererInterface ${DirectX12_LIB} ${DXC_LIB} ${DXGI_LIB})
+target_link_libraries(DirectX12Renderer PRIVATE RendererInterface ${DirectX12_LIB} ${DXGI_LIB})
 
-if(${RENDERER_INTERFACE_VERSION_MAJOR} GREATER ${RENDERER_DIRECTX12_VERSION_MAJOR})
-	message(SEND_ERROR "DirectX12Renderer must be updated to match the newer major version of RendererInterface\nRendererInterface at version ${RENDERER_INTERFACE_VERSION}\nDirectX12Renderer at version ${RENDERER_DIRECTX12_VERSION}")
+# Get properties from the RendererInterface library
+get_target_property(RendererInterface_VERSION RendererInterface VERSION)
+get_target_property(RendererInterface_SOVERSION RendererInterface SOVERSION)
+
+if(${RendererInterface_SOVERSION} GREATER ${PROJECT_VERSION_MAJOR})
+	message(SEND_ERROR "DirectX12Renderer must be updated to match the newer major version of RendererInterface\nRendererInterface at version ${RendererInterface_VERSION}\nDirectX12Renderer at version ${PROJECT_VERSION}")
+else()
+	message(STATUS "RendererInterface at version ${RendererInterface_VERSION}\nDirectX12Renderer at version ${PROJECT_VERSION}")
 endif()
+
+set_target_properties(DirectX12Renderer PROPERTIES 
+	VERSION ${PROJECT_VERSION} 
+	SOVERSION ${PROJECT_VERSION_MAJOR}
+)
 
 # End Target Creation *****************************************************************************
 #**************************************************************************************************
