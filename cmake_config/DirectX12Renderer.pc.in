@@ -1,0 +1,10 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+libdir=@LIBDIR_FOR_PKG_CONFIG@
+includedir=@INCLUDEDIR_FOR_PKG_CONFIG@
+
+Name: @PROJECT_NAME@
+Description: Renderer that fulfills the RendererInterface using DirectX12
+URL: https://github.com/Ultimate-Reality-Game-Engine/Renderer-DirectX12
+Version: @PROJECT_VERSION@
+Cflags: -I${includedir}
+Libs: -lDirectX12Renderer

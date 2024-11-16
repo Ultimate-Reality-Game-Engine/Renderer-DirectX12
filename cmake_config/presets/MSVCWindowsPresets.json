@@ -183,8 +183,7 @@
       ],
       "configurations": [
         "Debug"
-      ],
-      "packageDirectory": "${sourceDir}/out/package/Win/x86_64/MSVC/Debug"
+      ]
     },
     {
       "name": "Win-MSVC-x86_64-Release_Dev",
@@ -194,8 +193,7 @@
       ],
       "configurations": [
         "RelWithDebInfo"
-      ],
-      "packageDirectory": "${sourceDir}/out/package/Win/x86_64/MSVC/RelWithDebInfo"
+      ]
     },
     {
       "name": "Win-MSVC-x86_64-Release",
@@ -205,8 +203,7 @@
       ],
       "configurations": [
         "Release"
-      ],
-      "packageDirectory": "${sourceDir}/out/package/Win/x86_64/MSVC/Release"
+      ]
     }
   ]
 }

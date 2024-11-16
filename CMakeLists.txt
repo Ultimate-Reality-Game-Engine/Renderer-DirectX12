@@ -1,5 +1,4 @@
-# CMakeList.txt : RenderEngineProj::Renderer_DirectX12, include source and define
-# project specific logic here.
+# CMakeList.txt : UltReality::Rendering::DirectX12Renderer
 
 # CMake configuration and settings ****************************************************************
 #**************************************************************************************************
@@ -8,6 +7,11 @@ cmake_minimum_required (VERSION 3.25)
 
 project(RENDERER_DIRECTX12 VERSION 1.0.0)
 
+# Google tests require mimimum c++ version 14
+# setting minimum c++ version to 20
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 enable_testing()
 
 # Enable Hot Reload for MSVC compilers if supported.
@@ -15,12 +19,6 @@ if (POLICY CMP0141)
   cmake_policy(SET CMP0141 NEW)
   set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
 endif()
-
-# Google tests require mimimum c++ version 14
-# setting minimum c++ version to 20
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Define custom configuration types for Debug, Release, and Release-Dev
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release;RelWithDebInfo" CACHE STRING "List of supported build modes." FORCE)
@@ -41,6 +39,11 @@ endif()
 
 # Make sure CMake exports its compile commands so things like IntelliSense can detect them in editor
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Create options that are dependent onthis project being top level
+option(RENDERER_DIRECTX12_INSTALL "Enable project install" ${PROJECT_IS_TOP_LEVEL})
+
+include(GNUInstallDirs)
 
 # End CMake configuration and settings ************************************************************
 #**************************************************************************************************
@@ -99,16 +102,23 @@ find_library(DXGI_LIB dxgi)
 
 include(FetchContent)
 
+# Fetch the DirectX headers
+FetchContent_Declare(
+	DirectX-Headers 
+	GIT_REPOSITORY https://github.com/microsoft/DirectX-Headers.git 
+	GIT_TAG v1.614.1
+)
+
 # Fetch the RendererInterface library
 FetchContent_Declare(
 	RendererInterface 
 	GIT_REPOSITORY https://github.com/Ultimate-Reality-Game-Engine/Renderer-Interface.git 
 	GIT_TAG latest
 )
-FetchContent_MakeAvailable(RendererInterface)
+FetchContent_MakeAvailable(DirectX-Headers RendererInterface)
 
 # Create list of all source files to be used in this target
-file(GLOB_RECURSE DirectX12Renderer_SOURCE "${CMAKE_SOURCE_DIR}/src/*.cpp")
+file(GLOB_RECURSE DirectX12Renderer_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 if(DirectX12Renderer_SOURCE)
 # Add DirectX12 Renderer library target
@@ -116,15 +126,15 @@ add_library(DirectX12Renderer SHARED ${DirectX12Renderer_SOURCE})
 
 # Connect the Renderers headers to the library
 target_include_directories(DirectX12Renderer PUBLIC 
-	$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include> 
- 	$<INSTALL_INTERFACE:include> # This is used when the library is installed
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> 
+ 	$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> # This is used when the library is installed
 )
 
-# Connect the DirectX headers to the library
-target_include_directories(DirectX12Renderer PRIVATE ${DirectX12_INCLUDE_DIR})
+# Link the DirectX12 Helpers, DirectX12, RendererInterface, and DXGI libraries to the target
+target_link_libraries(DirectX12Renderer PRIVATE DirectX-Headers RendererInterface ${DirectX12_LIB} ${DXGI_LIB})
 
-# Link the DirectX12, DXC, and DXGI libraries to the target
-target_link_libraries(DirectX12Renderer PRIVATE RendererInterface ${DirectX12_LIB} ${DXGI_LIB})
+# Set the RENDERER_INTERFACE_EXPORTS macro for DirectX12Renderer
+target_compile_definitions(DirectX12Renderer PRIVATE RENDERER_INTERFACE_EXPORTS)
 
 # Get properties from the RendererInterface library
 get_target_property(RendererInterface_VERSION RendererInterface VERSION)
@@ -146,50 +156,84 @@ set_target_properties(DirectX12Renderer PROPERTIES
 
 # Installation and Packing Configuration **********************************************************
 #**************************************************************************************************
+if(RENDERER_DIRECTX12_INSTALL)
+	# Install the targets
+	install(
+		TARGETS DirectX12Renderer 
+		EXPORT DirectX12Renderer_Targets 
+		ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} # Static libraries/import libraries (.lib files for .dll linking) 
+		LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} # Shared libraries (.so) 
+		RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} # .exe or .dll 
+		PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} # Headers/include directories marked as PUBLIC 
+		PRIVATE_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} # Headers/include directories marked as PRIVATE
+	)
 
-include(CMakePackageConfigHelpers)
-write_basic_package_version_file(
-	"${CMAKE_BINARY_DIR}/RendererDirectX12ConfigVersion.cmake"
-	VERSION ${PACKAGE_VERSION}
-	COMPATIBILITY AnyNewerVersion
-)
+	# Create the targets CMake file which contains the above definitions
+	install(
+		EXPORT DirectX12Renderer_Targets 
+		FILE DirectX12Renderer_Targets.cmake 
+		NAMESPACE UltReality::Rendering:: 
+		DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/DirectX12Renderer/cmake
+	)
 
-# Install the library, header files, and config version file
-install(
-	TARGETS DirectX12Renderer 
-	EXPORT DirectX12RendererTargets
-)
-install(
-	EXPORT DirectX12RendererTargets 
-	FILE DirectX12RendererTargets.cmake 
-	DESTINATION lib/cmake/DirectX12Renderer
-)
-install(
-	FILES "${CMAKE_CURRENT_BINARY_DIR}/DirectX12RendererConfigVersion.cmake" 
-	DESTINATION lib/cmake/DirectX12Renderer
-)
-install(
-	DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ DESTINATION include
-)
+	# Install the actual includes
+	install(
+		DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ 
+		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+	)
 
-install(FILES "${CMAKE_BINARY_DIR}/DirectX12RendererConfigVersion.cmake" DESTINATION "lib/cmake/DirectX12Renderer")
+	# Generate and install the package version config files
+	include(CMakePackageConfigHelpers)
+	write_basic_package_version_file(
+		"DirectX12Renderer_ConfigVersion.cmake" 
+		VERSION ${PROJECT_VERSION} 
+		COMPATIBILITY SameMajorVersion
+	)
+	configure_package_config_file(
+		"${CMAKE_CURRENT_SOURCE_DIR}/cmake_config/DirectX12Renderer_Config.cmake.in" 
+		"${CMAKE_CURRENT_BINARY_DIR}/DirectX12Renderer_Config.cmake" 
+		INSTALL_DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/DirectX12Renderer/cmake
+	)
 
-# A version that is often used to denote a specific build of the software, including revisions, builds, or other metadata
-set(PACKAGE_VERSION_BUILD "${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}")
+	# Install the CMake config files
+	install(
+		FILES "${CMAKE_CURRENT_BINARY_DIR}/DirectX12Renderer_ConfigVersion.cmake" 
+		"${CMAKE_CURRENT_BINARY_DIR}/DirectX12Renderer_Config.cmake" 
+		DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/DirectX12Renderer/cmake
+	)
 
-set(PACKAGE_VERSION "${PROJECT_VERSION}-${PACKAGE_VERSION_BUILD}")
+	# Define Package install paths
+	set(INCLUDEDIR_FOR_PKG_CONFIG "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}")
+	set(LIBDIR_PKG_CONFIG "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}")
 
-set(PACKAGE_DIRECTORY "${CMAKE_SOURCE_DIR}/out/package")
-file(MAKE_DIRECTORY "${PACKAGE_DIRECTORY}")
+	# Create and install the package config file
+	configure_file(
+		"${CMAKE_CURRENT_SOURCE_DIR}/cmake_config/DirectX12Renderer.pc.in" 
+		"${CMAKE_CURRENT_BINARY_DIR}/DirectX12Renderer.pc" @ONLY
+	)
 
-set(CPACK_PACKAGE_NAME "DirectX12Renderer")
-set(CPACK_PACKAGE_VERSION "${PACKAGE_VERSION}")
+	# Install the package config file
+	install(
+		FILES "${CMAKE_CURRENT_BINARY_DIR}/DirectX12Renderer.pc" 
+		DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+	)
 
-set(CPACK_PACKAGE_VENDOR "Andrew Todd")
-set(CPACK_PACKAGE_CONTACT "andrewdanieltodd@gmail.com")
-include(CPack)
-message(STATUS "PACKAGE_VERSION is: ${PACKAGE_VERSION}")
-message(STATUS "PACKAGE_FILE_NAME is: ${CPACK_PACKAGE_FILE_NAME}")
+	# A version that is often used to denote a specific build of the software, including revisions, builds, or other metadata
+	set(PACKAGE_VERSION_BUILD "${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}")
+
+	set(PACKAGE_VERSION "${PROJECT_VERSION}-${PACKAGE_VERSION_BUILD}")
+
+	set(CPACK_PACKAGE_DIRECTORY "${CMAKE_SOURCE_DIR}/out/package")
+
+	set(CPACK_PACKAGE_NAME "DirectX12Renderer")
+	set(CPACK_PACKAGE_VERSION "${PACKAGE_VERSION}")
+
+	set(CPACK_PACKAGE_VENDOR "Andrew Todd")
+	set(CPACK_PACKAGE_CONTACT "andrewdanieltodd@gmail.com")
+	include(CPack)
+	message(STATUS "PACKAGE_VERSION is: ${PACKAGE_VERSION}")
+	message(STATUS "PACKAGE_FILE_NAME is: ${CPACK_PACKAGE_FILE_NAME}")
+endif()
 endif()
 
 # End Installation and Packing Configuration ******************************************************

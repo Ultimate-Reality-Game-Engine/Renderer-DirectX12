@@ -173,8 +173,7 @@
       ],
       "configurations": [
         "Debug"
-      ],
-      "packageDirectory": "${sourceDir}/out/package/Win/x86_64/Clang/Debug"
+      ]
     },
     {
       "name": "Win-Clang-x86_64-Release_Dev",
@@ -184,8 +183,7 @@
       ],
       "configurations": [
         "RelWithDebInfo"
-      ],
-      "packageDirectory": "${sourceDir}/out/package/Win/x86_64/Clang/RelWithDebInfo"
+      ]
     },
     {
       "name": "Win-Clang-x86_64-Release",
@@ -195,8 +193,7 @@
       ],
       "configurations": [
         "Release"
-      ],
-      "packageDirectory": "${sourceDir}/out/package/Win/x86_64/Clang/Release"
+      ]
     }
   ]
 }
