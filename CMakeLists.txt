@@ -109,13 +109,17 @@ FetchContent_Declare(
 	GIT_TAG v1.614.1
 )
 
-# Fetch the RendererInterface library
-FetchContent_Declare(
-	RendererInterface 
-	GIT_REPOSITORY https://github.com/Ultimate-Reality-Game-Engine/Renderer-Interface.git 
-	GIT_TAG latest
-)
-FetchContent_MakeAvailable(DirectX-Headers RendererInterface)
+if (NOT TARGET RendererInterface)
+	# Fetch the RendererInterface library
+	FetchContent_Declare(
+		RendererInterface 
+		GIT_REPOSITORY https://github.com/Ultimate-Reality-Game-Engine/Renderer-Interface.git 
+		GIT_TAG latest
+	)
+	FetchContent_MakeAvailable(DirectX-Headers RendererInterface)
+else()
+	FetchContent_MakeAvailable(DirectX-Headers)
+endif()
 
 # Create list of all source files to be used in this target
 file(GLOB_RECURSE DirectX12Renderer_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
