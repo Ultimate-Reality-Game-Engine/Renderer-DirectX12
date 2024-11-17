@@ -26,7 +26,7 @@ namespace UltReality::Rendering
 	/// <summary>
 	/// Class implements the <seealso cref="UltReality.Rendering.RendererInterface"/> interface using DirectX12
 	/// </summary>
-	class DirectX12Renderer : public RendererInterface
+	class RENDERER_INTERFACE_ABI DirectX12Renderer : public RendererInterface
 	{
 	private:
 		// Windows specific handle to a Windows window instance for this application. Render target for DirectX
@@ -173,46 +173,49 @@ namespace UltReality::Rendering
 		void LogOutputDisplayModes(IDXGIOutput* output, DXGI_FORMAT format);
 
 	public:
+		DirectX12Renderer() = default;
+		~DirectX12Renderer() = default;
+
 		/// <summary>
 		/// Called to initialize the renderer and prepare it for rendering tasks
 		/// </summary>
 		/// <param name="targetWindow">The window for the renderer to target. For DirectX12Renderer this should have been initialized with an HWND instance</param>
-		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL Initialize(DisplayTarget targetWindow, const UltReality::Utilities::GameTimer* gameTimer) final;
+		void RENDERER_INTERFACE_CALL Initialize(DisplayTarget targetWindow, const UltReality::Utilities::GameTimer* gameTimer) final;
 
 		/// <summary>
 		/// 
 		/// </summary>
-		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL CreateBuffer() final {};
+		void RENDERER_INTERFACE_CALL CreateBuffer() final {};
 
 		/// <summary>
 		/// Method that issues a render call. Purge the render queue
 		/// </summary>
-		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL Render() final {};
+		void RENDERER_INTERFACE_CALL Render() final {};
 
 		/// <summary>
 		/// Method that draws the rendered buffer onto the target window
 		/// </summary>
-		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL Present() final {};
+		void RENDERER_INTERFACE_CALL Present() final {};
 
 		/// <summary>
 		/// Method that updates renderer internals on a resize event
 		/// </summary>
-		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL OnResize(const UltReality::Utilities::EWindowResize& event) final;
+		void RENDERER_INTERFACE_CALL OnResize(const UltReality::Utilities::EWindowResize& event) final;
 
 		/// <summary>
 		/// Method that processes the commands queued up the point this method is called
 		/// </summary>
-		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL FlushCommandQueue() final;
+		void RENDERER_INTERFACE_CALL FlushCommandQueue() final;
 
 		/// <summary>
 		/// Method that calculates frame stats
 		/// </summary>
-		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL CalculateFrameStats(FrameStats* fs) final;
+		void RENDERER_INTERFACE_CALL CalculateFrameStats(FrameStats* fs) final;
 
 		/// <summary>
 		/// Method that gets info on available adapters and reports details
 		/// </summary>
-		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL LogAdapters() final;
+		void RENDERER_INTERFACE_CALL LogAdapters() final;
 	};
 }
 
