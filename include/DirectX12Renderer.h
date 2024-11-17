@@ -10,6 +10,8 @@
 
 #include <RendererInterface.h>
 #include <DisplayTarget.h>
+#include <PlatformMessageHandler.h>
+#include <GameTimer.h>
 
 #if defined(__GNUC__) or defined(__clang__)
 #define FORCE_INLINE inline __attribute__((always_inline))
@@ -30,6 +32,8 @@ namespace UltReality::Rendering
 		// Windows specific handle to a Windows window instance for this application. Render target for DirectX
 		HWND m_mainWin = nullptr;
 
+		const UltReality::Utilities::GameTimer* m_gameTimer = nullptr;
+
 		// Render Target View descriptor size
 		uint32_t m_rtvDescriptorSize;
 		// Depth Stencil View descriptor size
@@ -38,14 +42,17 @@ namespace UltReality::Rendering
 		uint32_t m_cbvSrvDescriptorSize;
 
 		// If MSAA is found to be supported this is set to true. Used to configure DirectX device to use MSAA
-		bool m_MsaaState = false;
+		bool m_MSAAState = false;
 		// Hardware is queried and quality level set according to capability
-		uint32_t m_MsaaQuality;
+		uint32_t m_MSAAQuality;
+
+		D3D12_VIEWPORT m_screenViewport;
+		D3D12_RECT m_scissorRect;
 
 		// Variable keeps track of the target window's width in pixels
-		uint32_t m_clientWidth = 1920;
+		uint16_t m_clientWidth = 1920;
 		// Variable keeps track of the target window's height in pixels
-		uint32_t m_clientHeight = 1080;
+		uint16_t m_clientHeight = 1080;
 		// Tracks the devices refresh rate
 		DXGI_RATIONAL m_clientRefreshRate = { 60, 1 };
 		
@@ -58,6 +65,8 @@ namespace UltReality::Rendering
 
 		// Format of the texels in the depth stencil buffers
 		DXGI_FORMAT m_depthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+		uint64_t m_currentFence = 0;
 
 		// ComPtr to the DirectX device
 		Microsoft::WRL::ComPtr<ID3D12Device> m_d3dDevice;
@@ -159,19 +168,51 @@ namespace UltReality::Rendering
 		/// <returns>Handle to the depth stencil view buffer</returns>
 		FORCE_INLINE D3D12_CPU_DESCRIPTOR_HANDLE DepthStencilView() const;
 
+		void LogAdapterOutputs(IDXGIAdapter* adapter);
+
+		void LogOutputDisplayModes(IDXGIOutput* output, DXGI_FORMAT format);
+
 	public:
 		/// <summary>
 		/// Called to initialize the renderer and prepare it for rendering tasks
 		/// </summary>
 		/// <param name="targetWindow">The window for the renderer to target. For DirectX12Renderer this should have been initialized with an HWND instance</param>
-		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL Initialize(DisplayTarget targetWindow) final;
+		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL Initialize(DisplayTarget targetWindow, const UltReality::Utilities::GameTimer* gameTimer) final;
 
 		/// <summary>
 		/// 
 		/// </summary>
-		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL CreateBuffer() final;
-		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL Render() final;
-		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL Present() final;
+		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL CreateBuffer() final {};
+
+		/// <summary>
+		/// Method that issues a render call. Purge the render queue
+		/// </summary>
+		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL Render() final {};
+
+		/// <summary>
+		/// Method that draws the rendered buffer onto the target window
+		/// </summary>
+		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL Present() final {};
+
+		/// <summary>
+		/// Method that updates renderer internals on a resize event
+		/// </summary>
+		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL OnResize(const UltReality::Utilities::EWindowResize& event) final;
+
+		/// <summary>
+		/// Method that processes the commands queued up the point this method is called
+		/// </summary>
+		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL FlushCommandQueue() final;
+
+		/// <summary>
+		/// Method that calculates frame stats
+		/// </summary>
+		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL CalculateFrameStats(FrameStats* fs) final;
+
+		/// <summary>
+		/// Method that gets info on available adapters and reports details
+		/// </summary>
+		RENDERER_INTERFACE_ABI void RENDERER_INTERFACE_CALL LogAdapters() final;
 	};
 }
 
