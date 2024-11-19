@@ -8,7 +8,7 @@
 
 #include <stdint.h>
 
-#include <RendererInterface.h>
+#include <IRenderer.h>
 #include <DisplayTarget.h>
 #include <PlatformMessageHandler.h>
 #include <GameTimer.h>
@@ -26,7 +26,7 @@ namespace UltReality::Rendering
 	/// <summary>
 	/// Class implements the <seealso cref="UltReality.Rendering.RendererInterface"/> interface using DirectX12
 	/// </summary>
-	class RENDERER_INTERFACE_ABI DirectX12Renderer : public RendererInterface
+	class RENDERER_INTERFACE_ABI DirectX12Renderer : public IRenderer
 	{
 	private:
 		// Windows specific handle to a Windows window instance for this application. Render target for DirectX
@@ -41,20 +41,15 @@ namespace UltReality::Rendering
 		// 
 		uint32_t m_cbvSrvDescriptorSize;
 
-		// If MSAA is found to be supported this is set to true. Used to configure DirectX device to use MSAA
-		bool m_MSAAState = false;
-		// Hardware is queried and quality level set according to capability
-		uint32_t m_MSAAQuality;
-
 		D3D12_VIEWPORT m_screenViewport;
 		D3D12_RECT m_scissorRect;
 
-		// Variable keeps track of the target window's width in pixels
-		uint16_t m_clientWidth = 1920;
-		// Variable keeps track of the target window's height in pixels
-		uint16_t m_clientHeight = 1080;
-		// Tracks the devices refresh rate
-		DXGI_RATIONAL m_clientRefreshRate = { 60, 1 };
+		bool m_msaaEnabled = false;
+		uint8_t m_msaaSampleCount = 1;
+		uint8_t m_msaaQualityLevel = 0;
+
+		float m_shadowBias = 0.005f;
+		uint8_t m_shadowSampleCount = 4;
 		
 		// Format of the texels in the swap chain (back buffer)
 		DXGI_FORMAT m_backBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -90,6 +85,16 @@ namespace UltReality::Rendering
 		Microsoft::WRL::ComPtr<ID3D12Resource> m_swapChainBuffer[m_swapChainBufferCount];
 		// ComPtr to the depth stencil view buffer
 		Microsoft::WRL::ComPtr<ID3D12Resource> m_depthStencilBuffer;
+		// ComPtr to descriptors for render msaa render target view
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_msaaRtvHeap;
+		// ComPtr to the msaa render target view
+		Microsoft::WRL::ComPtr<ID3D12Resource> m_msaaRenderTarget;
+		// ComPtr to descriptors for texture samplers
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_samplerHeap;
+		// ComPtr to descriptor heap for shadow map
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_shadowMapHeap;
+		// ComPtr to shadow map
+		Microsoft::WRL::ComPtr<ID3D12Resource> m_shadowMap;
 
 #if defined(_DEBUG) or defined(DEBUG)
 		Microsoft::WRL::ComPtr<ID3D12Debug> m_debugController;
@@ -113,7 +118,13 @@ namespace UltReality::Rendering
 		/// Queries the devices MSAA quality level support and sets variable with value <seealso cref="m_4xMsaaQuality"/>
 		/// </summary>
 		/// <param name="sampleCount">Quality level to query for</param>
-		FORCE_INLINE void CheckMSAAQualitySupport(const uint32_t sampleCount);
+		FORCE_INLINE bool CheckMSAAQualitySupport(const uint32_t sampleCount);
+
+		FORCE_INLINE void ConfigureMSAA();
+
+		FORCE_INLINE void DisableMSAA();
+
+		FORCE_INLINE void RecreateMSAAResources();
 
 		/// <summary>
 		/// Creates the renderer's command queue and sets <seealso cref="m_commandQueue"/>
@@ -155,6 +166,18 @@ namespace UltReality::Rendering
 		/// </summary>
 		FORCE_INLINE void SetViewport();
 		//FORCE_INLINE void SetScissorRectangles(D3D12_RECT* rect);
+
+		FORCE_INLINE void UpdateSamplerDescriptor();
+
+		FORCE_INLINE void UpdateTextureQuality();
+
+		FORCE_INLINE void UpdateMipmapping();
+
+		FORCE_INLINE void UpdateShadowQuality();
+
+		FORCE_INLINE void RecreateShadowMap();
+
+		FORCE_INLINE void UpdateSoftShadowsState();
 
 		/// <summary>
 		/// Gets the current back buffer view
@@ -198,11 +221,6 @@ namespace UltReality::Rendering
 		void RENDERER_INTERFACE_CALL Present() final {};
 
 		/// <summary>
-		/// Method that updates renderer internals on a resize event
-		/// </summary>
-		void RENDERER_INTERFACE_CALL OnResize(const UltReality::Utilities::EWindowResize& event) final;
-
-		/// <summary>
 		/// Method that processes the commands queued up the point this method is called
 		/// </summary>
 		void RENDERER_INTERFACE_CALL FlushCommandQueue() final;
@@ -216,6 +234,48 @@ namespace UltReality::Rendering
 		/// Method that gets info on available adapters and reports details
 		/// </summary>
 		void RENDERER_INTERFACE_CALL LogAdapters() final;
+
+		/// <summary>
+		/// Method to set the display settings for the renderer
+		/// </summary>
+		/// <param name="settings">Instance of <seealso cref="UltReality.Rendering.DisplaySettings"/> struct to get settings from</param>
+		void RENDERER_INTERFACE_CALL SetDisplaySettings(const DisplaySettings& settings) final;
+
+		/// <summary>
+		/// Method to set the anti aliasing settings for the renderer
+		/// </summary>
+		/// <param name="settings">Instance of <seealso cref="UltReality.Rendering.AntiAliasingSettings"/> struct to get settings from</param>
+		void RENDERER_INTERFACE_CALL SetAntiAliasingSettings(const AntiAliasingSettings& settings) final;
+
+		/// <summary>
+		/// Method to set the texture settings for the renderer
+		/// </summary>
+		/// <param name="settings">Instance of <seealso cref="UltReality.Rendering.TextureSettings"/> struct to get settings from</param>
+		void RENDERER_INTERFACE_CALL SetTextureSettings(const TextureSettings& settings) final;
+
+		/// <summary>
+		/// Method to set the shadow settings for the renderer
+		/// </summary>
+		/// <param name="settings">Instance of <seealso cref="UltReality.Rendering.ShadowSettings"/> struct to get settings from</param>
+		void RENDERER_INTERFACE_CALL SetShadowSettings(const ShadowSettings& settings) final;
+
+		/// <summary>
+		/// Method to set the lighting settings for the renderers
+		/// </summary>
+		/// <param name="settings">Instance of <seealso cref="UltReality.Rendering.LightingSettings"/> struct to get settings from</param>
+		void RENDERER_INTERFACE_CALL SetLightingSettings(const LightingSettings& settings) final;
+
+		/// <summary>
+		/// Method to set the post-processing settings for the renderer
+		/// </summary>
+		/// <param name="settings">Instance of <seealso cref="UltReality.Rendering.PostProcessingSettings"/> struct to get settings from</param>
+		void RENDERER_INTERFACE_CALL SetPostProcessingSettings(const PostProcessingSettings& settings) final;
+
+		/// <summary>
+		/// Method to set the performance related settings for the renderer
+		/// </summary>
+		/// <param name="settings">Instance of <seealso cref="UltReality.Rendering.PerformanceSettings"/> struct to get settings from</param>
+		void RENDERER_INTERFACE_CALL SetPerformanceSettings(const PerformanceSettings& settings) final;
 	};
 }
 

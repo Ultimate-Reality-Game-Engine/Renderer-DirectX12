@@ -79,13 +79,12 @@ namespace UltReality::Rendering
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	}
 
-	FORCE_INLINE void DirectX12Renderer::CheckMSAAQualitySupport(const uint32_t sampleCount)
+	FORCE_INLINE bool DirectX12Renderer::CheckMSAAQualitySupport(const uint32_t sampleCount)
 	{
 		D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
 		qualityLevels.Format = m_backBufferFormat;
 		qualityLevels.SampleCount = sampleCount;
 		qualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
-		qualityLevels.NumQualityLevels = 0;
 
 		ThrowIfFailed(m_d3dDevice->CheckFeatureSupport(
 			D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
@@ -93,11 +92,38 @@ namespace UltReality::Rendering
 			sizeof(qualityLevels)
 		));
 
-		m_MSAAQuality = qualityLevels.NumQualityLevels;
 #if defined(_DEBUG) or defined(DEBUG)
-		assert(m_MSAAQuality > 0 && "Unexpected MSAA quality level");
+		assert(qualityLevels.NumQualityLevels >= m_antiAliasingSettings.qualityLevel && "Unexpected MSAA quality level");
 #endif
-		m_MSAAState = true;
+	}
+
+	FORCE_INLINE void DirectX12Renderer::ConfigureMSAA()
+	{
+		if (CheckMSAAQualitySupport(m_antiAliasingSettings.sampleCount))
+		{
+			m_msaaEnabled = true;
+			m_msaaSampleCount = m_antiAliasingSettings.sampleCount;
+			m_msaaQualityLevel = m_antiAliasingSettings.qualityLevel;
+
+			RecreateMSAAResources();
+		}
+	}
+
+	FORCE_INLINE void DirectX12Renderer::DisableMSAA()
+	{
+		m_msaaEnabled = false;
+		m_msaaSampleCount = 1;
+		m_msaaQualityLevel = 0;
+
+		RecreateMSAAResources();
+	}
+
+	FORCE_INLINE void DirectX12Renderer::RecreateMSAAResources()
+	{
+		FlushCommandQueue();
+
+		CreateRenderTargetView();
+		CreateDepthStencilBuffer();
 	}
 
 	FORCE_INLINE void DirectX12Renderer::CreateCommandQueue()
@@ -141,15 +167,15 @@ namespace UltReality::Rendering
 		m_swapChain.Reset();
 
 		DXGI_SWAP_CHAIN_DESC sd;
-		sd.BufferDesc.Width = m_clientWidth;
-		sd.BufferDesc.Height = m_clientHeight;
-		sd.BufferDesc.RefreshRate = m_clientRefreshRate;
+		sd.BufferDesc.Width = m_displaySettings.width;
+		sd.BufferDesc.Height = m_displaySettings.height;
+		sd.BufferDesc.RefreshRate = DXGI_RATIONAL{ m_displaySettings.refreshRate, 1 };
 		sd.BufferDesc.Format = m_backBufferFormat;
 		sd.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
 		sd.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 
-		sd.SampleDesc.Count = m_MSAAState ? 4 : 1;
-		sd.SampleDesc.Quality = m_MSAAState ? (m_MSAAQuality - 1) : 0;
+		sd.SampleDesc.Count = m_msaaEnabled ? m_antiAliasingSettings.sampleCount : 1;
+		sd.SampleDesc.Quality = m_msaaEnabled ? m_antiAliasingSettings.qualityLevel : 0;
 
 		sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 		sd.BufferCount = m_swapChainBufferCount;
@@ -196,6 +222,8 @@ namespace UltReality::Rendering
 		CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHeapHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart());
 		for (uint32_t i = 0; i < m_swapChainBufferCount; i++)
 		{
+			m_swapChainBuffer[i].Reset();
+
 			ThrowIfFailed(m_swapChain->GetBuffer(
 				i, 
 				IID_PPV_ARGS(&m_swapChainBuffer[i])
@@ -209,21 +237,55 @@ namespace UltReality::Rendering
 
 			rtvHeapHandle.Offset(1, m_rtvDescriptorSize);
 		}
+
+		if (m_msaaEnabled)
+		{
+			D3D12_RESOURCE_DESC msaaRenderTargetDesc = {};
+			msaaRenderTargetDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+			msaaRenderTargetDesc.Width = m_displaySettings.width;
+			msaaRenderTargetDesc.Height = m_displaySettings.height;
+			msaaRenderTargetDesc.MipLevels = 1;
+			msaaRenderTargetDesc.Format = m_backBufferFormat;
+			msaaRenderTargetDesc.SampleDesc.Count = m_msaaSampleCount;
+			msaaRenderTargetDesc.SampleDesc.Quality = m_msaaQualityLevel;
+			msaaRenderTargetDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+			D3D12_CLEAR_VALUE clearValue = {};
+			clearValue.Format = m_backBufferFormat;
+			clearValue.Color[0] = 0.0f;
+			clearValue.Color[1] = 0.0f;
+			clearValue.Color[2] = 0.0f;
+			clearValue.Color[3] = 1.0f;
+
+			CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_DEFAULT);
+			ThrowIfFailed(m_d3dDevice->CreateCommittedResource(
+				&heapProps,
+				D3D12_HEAP_FLAG_NONE,
+				&msaaRenderTargetDesc,
+				D3D12_RESOURCE_STATE_RENDER_TARGET,
+				&clearValue,
+				IID_PPV_ARGS(m_msaaRenderTarget.GetAddressOf())
+			));
+
+			m_d3dDevice->CreateRenderTargetView(m_msaaRenderTarget.Get(), nullptr, m_msaaRtvHeap->GetCPUDescriptorHandleForHeapStart());
+		}
 	}
 
 	FORCE_INLINE void DirectX12Renderer::CreateDepthStencilBuffer()
 	{
+		m_depthStencilBuffer.Reset();
+
 		// Create the depth/stencil buffer and view
 		D3D12_RESOURCE_DESC depthStencilDesc;
 		depthStencilDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 		depthStencilDesc.Alignment = 0;
-		depthStencilDesc.Width = m_clientWidth;
-		depthStencilDesc.Height = m_clientHeight;
+		depthStencilDesc.Width = m_displaySettings.width;
+		depthStencilDesc.Height = m_displaySettings.height;
 		depthStencilDesc.DepthOrArraySize = 1;
 		depthStencilDesc.MipLevels = 1;
 		depthStencilDesc.Format = m_depthStencilFormat;
-		depthStencilDesc.SampleDesc.Count = m_MSAAState ? 4 : 1;
-		depthStencilDesc.SampleDesc.Quality = m_MSAAState ? (m_MSAAQuality - 1) : 0;
+		depthStencilDesc.SampleDesc.Count = m_msaaEnabled ? m_msaaSampleCount : 1;
+		depthStencilDesc.SampleDesc.Quality = m_msaaEnabled ? m_msaaQualityLevel : 0;
 		depthStencilDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 		depthStencilDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
@@ -237,16 +299,21 @@ namespace UltReality::Rendering
 			&heapProps,
 			D3D12_HEAP_FLAG_NONE,
 			&depthStencilDesc,
-			D3D12_RESOURCE_STATE_COMMON,
+			D3D12_RESOURCE_STATE_DEPTH_WRITE,
 			&optClear,
 			IID_PPV_ARGS(m_depthStencilBuffer.GetAddressOf())
 		));
 
+		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+		dsvDesc.Format = m_depthStencilFormat;
+		dsvDesc.ViewDimension = m_msaaEnabled ? D3D12_DSV_DIMENSION_TEXTURE2DMS : D3D12_DSV_DIMENSION_TEXTURE2D;
+		dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
+
 		// Create descriptor to mip level 0 of entire resource using the format of the resource
 		m_d3dDevice->CreateDepthStencilView(
 			m_depthStencilBuffer.Get(),
-			nullptr,
-			DepthStencilView()
+			&dsvDesc,
+			m_dsvHeap->GetCPUDescriptorHandleForHeapStart()
 		);
 
 		// Transition the resource from its initial state to state so it can be used as a depth buffer
@@ -263,8 +330,8 @@ namespace UltReality::Rendering
 		D3D12_VIEWPORT vp;
 		vp.TopLeftX = 0.0f;
 		vp.TopLeftY = 0.0f;
-		vp.Width = static_cast<float>(m_clientWidth);
-		vp.Height = static_cast<float>(m_clientHeight);
+		vp.Width = static_cast<float>(m_displaySettings.width);
+		vp.Height = static_cast<float>(m_displaySettings.height);
 		vp.MinDepth = 0.0f;
 		vp.MaxDepth = 1.0f;
 
@@ -278,6 +345,126 @@ namespace UltReality::Rendering
 	{
 		m_commandList->RSSetScissorRects(1, rect);
 	}*/
+
+	FORCE_INLINE void DirectX12Renderer::UpdateSamplerDescriptor()
+	{
+		D3D12_SAMPLER_DESC samplerDesc = {};
+		samplerDesc.Filter = (m_textureSettings.filteringLevel > 4) ? D3D12_FILTER_ANISOTROPIC : D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.MinLOD = 0;
+		samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
+		samplerDesc.MipLODBias = 0.0f;
+		samplerDesc.MaxAnisotropy = m_textureSettings.filteringLevel;
+
+		CD3DX12_CPU_DESCRIPTOR_HANDLE samplerHandle(m_samplerHeap->GetCPUDescriptorHandleForHeapStart());
+		m_d3dDevice->CreateSampler(&samplerDesc, samplerHandle);
+	}
+
+	FORCE_INLINE void DirectX12Renderer::UpdateTextureQuality()
+	{
+		// Adjust texture resolution scale based on quality setting
+		float resolutionScale;
+		switch (m_textureSettings.quality)
+		{
+		case TextureSettings::TextureQuality::low:
+			resolutionScale = 0.5f; // Half resolution
+			break;
+
+		case TextureSettings::TextureQuality::medium:
+			resolutionScale = 0.75f; // Three-quarters resolution
+			break;
+
+		case TextureSettings::TextureQuality::high:
+			resolutionScale = 1.0f; // Full resolution
+			break;
+
+		case TextureSettings::TextureQuality::ultra:
+			resolutionScale = 1.5f; // Enhanced resolution (of supported)
+			break;
+		}
+
+		// Apply resolution scaling logic (e.g., recreate texture resources)
+		//RecreateTextures(resolutionScale);
+	}
+
+	FORCE_INLINE void DirectX12Renderer::UpdateMipmapping()
+	{
+		// Recreate textures with or without mipmaps
+		/*for (auto& texture : m_loadedTextures)
+		{
+			texture->EnableMipmaps(m_textureSettings.mipmapping);
+		}*/
+	}
+
+	FORCE_INLINE void DirectX12Renderer::UpdateShadowQuality()
+	{
+		switch (m_shadowSettings.quality)
+		{
+		case ShadowSettings::ShadowQuality::low:
+			m_shadowBias = 0.005f;
+			m_shadowSampleCount = 4;
+			break;
+
+		case ShadowSettings::ShadowQuality::medium:
+			m_shadowBias = 0.003f;
+			m_shadowSampleCount = 8;
+			break;
+
+		case ShadowSettings::ShadowQuality::high:
+			m_shadowBias = 0.001f;
+			m_shadowSampleCount = 16;
+			break;
+
+		case ShadowSettings::ShadowQuality::ultra:
+			m_shadowBias = 0.0005f;
+			m_shadowSampleCount = 32;
+			break;
+		}
+	}
+
+	FORCE_INLINE void DirectX12Renderer::RecreateShadowMap()
+	{
+		// Release the old shadow map
+		m_shadowMap.Reset();
+
+		D3D12_RESOURCE_DESC shadowMapDesc = {};
+		shadowMapDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+		shadowMapDesc.Width = m_shadowSettings.mapResolution;
+		shadowMapDesc.Height = m_shadowSettings.mapResolution;
+		shadowMapDesc.MipLevels = 1;
+		shadowMapDesc.Format = DXGI_FORMAT_D32_FLOAT;
+		shadowMapDesc.SampleDesc.Count = 1;
+		shadowMapDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+		D3D12_CLEAR_VALUE clearValue = {};
+		clearValue.Format = DXGI_FORMAT_D32_FLOAT;
+		clearValue.DepthStencil.Depth = 1.0f;
+		clearValue.DepthStencil.Stencil = 0;
+
+		ThrowIfFailed(m_d3dDevice->CreateCommittedResource(
+			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+			D3D12_HEAP_FLAG_NONE,
+			&shadowMapDesc,
+			D3D12_RESOURCE_STATE_DEPTH_WRITE,
+			&clearValue,
+			IID_PPV_ARGS(m_shadowMap.GetAddressOf())
+		));
+
+		// Create a depth-stencil view for the shadow map
+		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+		dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+		dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+		dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
+
+		m_d3dDevice->CreateDepthStencilView(m_shadowMap.Get(), &dsvDesc, m_shadowMapHeap->GetCPUDescriptorHandleForHeapStart());
+	}
+
+	FORCE_INLINE void DirectX12Renderer::UpdateSoftShadowsState()
+	{
+
+	}
 
 	FORCE_INLINE D3D12_CPU_DESCRIPTOR_HANDLE DirectX12Renderer::CurrentBackBufferView() const
 	{
@@ -303,102 +490,15 @@ namespace UltReality::Rendering
 		CreateDevice();
 		CreateFence();
 		GetDescriptorSizes();
-		CheckMSAAQualitySupport(4);
 		CreateCommandQueue();
 		CreateCommandAllocator();
 		CreateCommandList();
+
 		CreateSwapChain();
 		CreateDescriptorHeaps();
 		CreateRenderTargetView();
 		CreateDepthStencilBuffer();
 		SetViewport();
-	}
-
-	void DirectX12Renderer::OnResize(const EWindowResize& event)
-	{
-		using SizeDetails = EWindowResize::SizeDetails;
-
-		// Save the new client area dimensions.
-		m_clientWidth = event.width;
-		m_clientHeight = event.height;
-
-		// Flush before changing any resources.
-		FlushCommandQueue();
-
-		ThrowIfFailed(m_commandList->Reset(m_directCmdListAlloc.Get(), nullptr));
-
-		// Release the previous resources we will be recreating.
-		for (int i = 0; i < m_swapChainBufferCount; ++i)
-			m_swapChainBuffer[i].Reset();
-		m_depthStencilBuffer.Reset();
-
-		// Resize the swap chain.
-		ThrowIfFailed(m_swapChain->ResizeBuffers(
-			m_swapChainBufferCount,
-			m_clientWidth, m_clientHeight,
-			m_backBufferFormat,
-			DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
-
-		m_currBackBuffer = 0;
-
-		CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHeapHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart());
-		for (UINT i = 0; i < m_swapChainBufferCount; i++)
-		{
-			ThrowIfFailed(m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_swapChainBuffer[i])));
-			m_d3dDevice->CreateRenderTargetView(m_swapChainBuffer[i].Get(), nullptr, rtvHeapHandle);
-			rtvHeapHandle.Offset(1, m_rtvDescriptorSize);
-		}
-
-		// Create the depth/stencil buffer and view.
-		D3D12_RESOURCE_DESC depthStencilDesc;
-		depthStencilDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-		depthStencilDesc.Alignment = 0;
-		depthStencilDesc.Width = m_clientWidth;
-		depthStencilDesc.Height = m_clientHeight;
-		depthStencilDesc.DepthOrArraySize = 1;
-		depthStencilDesc.MipLevels = 1;
-		depthStencilDesc.Format = m_depthStencilFormat;
-		depthStencilDesc.SampleDesc.Count = m_MSAAState ? 4 : 1;
-		depthStencilDesc.SampleDesc.Quality = m_MSAAState ? (m_MSAAQuality - 1) : 0;
-		depthStencilDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-		depthStencilDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-
-		D3D12_CLEAR_VALUE optClear;
-		optClear.Format = m_depthStencilFormat;
-		optClear.DepthStencil.Depth = 1.0f;
-		optClear.DepthStencil.Stencil = 0;
-		ThrowIfFailed(m_d3dDevice->CreateCommittedResource(
-			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-			D3D12_HEAP_FLAG_NONE,
-			&depthStencilDesc,
-			D3D12_RESOURCE_STATE_COMMON,
-			&optClear,
-			IID_PPV_ARGS(m_depthStencilBuffer.GetAddressOf())));
-
-		// Create descriptor to mip level 0 of entire resource using the format of the resource.
-		m_d3dDevice->CreateDepthStencilView(m_depthStencilBuffer.Get(), nullptr, DepthStencilView());
-
-		// Transition the resource from its initial state to be used as a depth buffer.
-		m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_depthStencilBuffer.Get(),
-			D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE));
-
-		// Execute the resize commands.
-		ThrowIfFailed(m_commandList->Close());
-		ID3D12CommandList* cmdsLists[] = { m_commandList.Get() };
-		m_commandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
-
-		// Wait until resize is complete.
-		FlushCommandQueue();
-
-		// Update the viewport transform to cover the client area.
-		m_screenViewport.TopLeftX = 0;
-		m_screenViewport.TopLeftY = 0;
-		m_screenViewport.Width = static_cast<float>(m_clientWidth);
-		m_screenViewport.Height = static_cast<float>(m_clientHeight);
-		m_screenViewport.MinDepth = 0.0f;
-		m_screenViewport.MaxDepth = 1.0f;
-
-		m_scissorRect = { 0, 0, m_clientWidth, m_clientHeight };
 	}
 
 	void DirectX12Renderer::FlushCommandQueue()
@@ -520,5 +620,181 @@ namespace UltReality::Rendering
 				L"\n";
 			::OutputDebugStringW(text.c_str());
 		}
+	}
+
+	void RENDERER_INTERFACE_CALL DirectX12Renderer::SetDisplaySettings(const DisplaySettings& settings)
+	{
+		if (settings.width != m_displaySettings.width || settings.height != m_displaySettings.height)
+		{
+			// Update cached dimensions
+			m_displaySettings.width = settings.width;
+			m_displaySettings.height = settings.height;
+
+			FlushCommandQueue();
+
+			m_swapChain->ResizeBuffers(
+				m_swapChainBufferCount,
+				m_displaySettings.width,
+				m_displaySettings.height,
+				m_backBufferFormat,
+				DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
+			);
+
+			// Recreate render target views for the new swap chain buffers
+			CreateRenderTargetView();
+
+			// Recreate the depth-stencil buffer
+			CreateDepthStencilBuffer();
+
+			// Update the viewport and scissor rect
+			SetViewport();
+		}
+
+		if (settings.mode != m_displaySettings.mode)
+		{
+			m_displaySettings.mode = settings.mode;
+
+			// Handle fullscreen, borderless, or windowed mode
+			if (m_swapChain)
+			{
+				BOOL isCurrentlyFullscreen = FALSE;
+				m_swapChain->GetFullscreenState(&isCurrentlyFullscreen, nullptr);
+
+				if (m_displaySettings.mode == DisplaySettings::ScreenMode::Fullscreen && !isCurrentlyFullscreen)
+				{
+					m_swapChain->SetFullscreenState(TRUE, nullptr);
+				}
+				else if (m_displaySettings.mode != DisplaySettings::ScreenMode::Fullscreen && isCurrentlyFullscreen)
+				{
+					m_swapChain->SetFullscreenState(FALSE, nullptr);
+				}
+
+				// Borderless mode
+				if (m_displaySettings.mode == DisplaySettings::ScreenMode::Borderless)
+				{
+					SetWindowLongPtr(m_mainWin, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+					SetWindowPos(m_mainWin, HWND_TOP, 0, 0, m_displaySettings.width, m_displaySettings.height, SWP_FRAMECHANGED);
+				}
+			}
+		}
+
+		if (settings.refreshRate != m_displaySettings.refreshRate)
+		{
+			m_displaySettings.refreshRate = settings.refreshRate;
+		}
+
+		if (settings.vSync != m_displaySettings.vSync)
+		{
+			m_displaySettings.vSync = settings.vSync;
+		}
+	}
+
+	void RENDERER_INTERFACE_CALL DirectX12Renderer::SetAntiAliasingSettings(const AntiAliasingSettings& settings)
+	{
+		m_antiAliasingSettings.sampleCount = settings.sampleCount;
+		m_antiAliasingSettings.qualityLevel = settings.qualityLevel;
+
+		if (settings.type != m_antiAliasingSettings.type)
+		{
+			m_antiAliasingSettings.type = settings.type;
+
+			if (settings.type == AntiAliasingSettings::AntiAliasingType::MSAA)
+			{
+				ConfigureMSAA();
+			}
+			else
+			{
+				DisableMSAA();
+			}
+
+			// Additional logic for FXAA/TAA added here is needed
+		}
+	}
+
+	void RENDERER_INTERFACE_CALL DirectX12Renderer::SetTextureSettings(const TextureSettings& settings)
+	{
+		// Check and apply filtering level changes
+		if (settings.filteringLevel != m_textureSettings.filteringLevel)
+		{
+			m_textureSettings.filteringLevel = settings.filteringLevel;
+
+			// Update sampler descriptors to reflect the new filtering level
+			UpdateSamplerDescriptor();
+		}
+
+		// Check and apply texture quality changes
+		if (settings.quality != m_textureSettings.quality)
+		{
+			m_textureSettings.quality = settings.quality;
+
+			// Adjust texture resource resolution/scaling to match the quality setting
+			UpdateTextureQuality();
+		}
+
+		// Check and apply mipmapping changes
+		if (settings.mipmapping != m_textureSettings.mipmapping)
+		{
+			m_textureSettings.mipmapping = settings.mipmapping;
+
+			// recreate textures with or without mipmaps as needed
+			UpdateMipmapping();
+		}
+	}
+
+	void RENDERER_INTERFACE_CALL DirectX12Renderer::SetShadowSettings(const ShadowSettings& settings)
+	{
+		// Check and apply shadow quality changes
+		if (settings.quality != m_shadowSettings.quality)
+		{
+			m_shadowSettings.quality = settings.quality;
+
+			// Adjust shadow rendering parameters based on quality
+			UpdateShadowQuality();
+		}
+
+		// Check and apply shadow map resolution changes
+		if (settings.mapResolution != m_shadowSettings.mapResolution)
+		{
+			m_shadowSettings.mapResolution = settings.mapResolution;
+
+			// Recreate shadow maps with the new resolution
+			RecreateShadowMap();
+		}
+
+		// Check and apply soft shadow settings
+		if (settings.softShadows != m_shadowSettings.softShadows)
+		{
+			m_shadowSettings.softShadows = settings.softShadows;
+
+			// Update pipeline state or shaders to toggle soft shadows
+			UpdateSoftShadowsState();
+		}
+	}
+
+	/// <summary>
+	/// Method to set the lighting settings for the renderers
+	/// </summary>
+	/// <param name="settings">Instance of <seealso cref="UltReality.Rendering.LightingSettings"/> struct to get settings from</param>
+	void RENDERER_INTERFACE_CALL SetLightingSettings(const LightingSettings& settings)
+	{
+
+	}
+
+	/// <summary>
+	/// Method to set the post-processing settings for the renderer
+	/// </summary>
+	/// <param name="settings">Instance of <seealso cref="UltReality.Rendering.PostProcessingSettings"/> struct to get settings from</param>
+	void RENDERER_INTERFACE_CALL SetPostProcessingSettings(const PostProcessingSettings& settings)
+	{
+
+	}
+
+	/// <summary>
+	/// Method to set the performance related settings for the renderer
+	/// </summary>
+	/// <param name="settings">Instance of <seealso cref="UltReality.Rendering.PerformanceSettings"/> struct to get settings from</param>
+	void RENDERER_INTERFACE_CALL SetPerformanceSettings(const PerformanceSettings& settings)
+	{
+
 	}
 }
