@@ -92,9 +92,10 @@ namespace UltReality::Rendering
 			sizeof(qualityLevels)
 		));
 
-#if defined(_DEBUG) or defined(DEBUG)
-		assert(qualityLevels.NumQualityLevels >= m_antiAliasingSettings.qualityLevel && "Unexpected MSAA quality level");
-#endif
+		if (qualityLevels.NumQualityLevels <= m_antiAliasingSettings.qualityLevel)
+			return false;
+
+		return true;
 	}
 
 	FORCE_INLINE void DirectX12Renderer::ConfigureMSAA()
@@ -442,9 +443,9 @@ namespace UltReality::Rendering
 		clearValue.Format = DXGI_FORMAT_D32_FLOAT;
 		clearValue.DepthStencil.Depth = 1.0f;
 		clearValue.DepthStencil.Stencil = 0;
-
+		CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_DEFAULT);
 		ThrowIfFailed(m_d3dDevice->CreateCommittedResource(
-			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+			&heapProps,
 			D3D12_HEAP_FLAG_NONE,
 			&shadowMapDesc,
 			D3D12_RESOURCE_STATE_DEPTH_WRITE,
@@ -514,7 +515,7 @@ namespace UltReality::Rendering
 		// Wait until the GPU has completed commands up to this fence point.
 		if (m_fence->GetCompletedValue() < m_currentFence)
 		{
-			HANDLE eventHandle = CreateEventEx(nullptr, false, false, EVENT_ALL_ACCESS);
+			HANDLE eventHandle = CreateEvent(nullptr, false, false, nullptr);
 
 			// Fire event when GPU hits current fence.  
 			ThrowIfFailed(m_fence->SetEventOnCompletion(m_currentFence, eventHandle));
@@ -775,7 +776,7 @@ namespace UltReality::Rendering
 	/// Method to set the lighting settings for the renderers
 	/// </summary>
 	/// <param name="settings">Instance of <seealso cref="UltReality.Rendering.LightingSettings"/> struct to get settings from</param>
-	void RENDERER_INTERFACE_CALL SetLightingSettings(const LightingSettings& settings)
+	void RENDERER_INTERFACE_CALL DirectX12Renderer::SetLightingSettings(const LightingSettings& settings)
 	{
 
 	}
@@ -784,7 +785,7 @@ namespace UltReality::Rendering
 	/// Method to set the post-processing settings for the renderer
 	/// </summary>
 	/// <param name="settings">Instance of <seealso cref="UltReality.Rendering.PostProcessingSettings"/> struct to get settings from</param>
-	void RENDERER_INTERFACE_CALL SetPostProcessingSettings(const PostProcessingSettings& settings)
+	void RENDERER_INTERFACE_CALL DirectX12Renderer::SetPostProcessingSettings(const PostProcessingSettings& settings)
 	{
 
 	}
@@ -793,7 +794,7 @@ namespace UltReality::Rendering
 	/// Method to set the performance related settings for the renderer
 	/// </summary>
 	/// <param name="settings">Instance of <seealso cref="UltReality.Rendering.PerformanceSettings"/> struct to get settings from</param>
-	void RENDERER_INTERFACE_CALL SetPerformanceSettings(const PerformanceSettings& settings)
+	void RENDERER_INTERFACE_CALL DirectX12Renderer::SetPerformanceSettings(const PerformanceSettings& settings)
 	{
 
 	}
