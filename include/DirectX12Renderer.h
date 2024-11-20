@@ -179,6 +179,8 @@ namespace UltReality::Rendering
 
 		FORCE_INLINE void UpdateSoftShadowsState();
 
+		FORCE_INLINE ID3D12Resource* CurrentBackBuffer() const;
+
 		/// <summary>
 		/// Gets the current back buffer view
 		/// </summary>
@@ -213,12 +215,12 @@ namespace UltReality::Rendering
 		/// <summary>
 		/// Method that issues a render call. Purge the render queue
 		/// </summary>
-		void RENDERER_INTERFACE_CALL Render() final {};
+		void RENDERER_INTERFACE_CALL Render() final;
 
 		/// <summary>
 		/// Method that draws the rendered buffer onto the target window
 		/// </summary>
-		void RENDERER_INTERFACE_CALL Present() final {};
+		void RENDERER_INTERFACE_CALL Present() final;
 
 		/// <summary>
 		/// Method that processes the commands queued up the point this method is called
