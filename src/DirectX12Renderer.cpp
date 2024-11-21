@@ -32,14 +32,6 @@ namespace UltReality::Rendering
 
 	FORCE_INLINE void DirectX12Renderer::CreateDevice()
 	{
-#if defined(_DEBUG) or defined(DEBUG)
-		// Enable the D3D12 debug layer
-		{
-			ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&m_debugController)));
-			m_debugController->EnableDebugLayer();
-		}
-#endif
-
 		ThrowIfFailed(CreateDXGIFactory1(IID_PPV_ARGS(&m_dxgiFactory)));
 
 		HRESULT hardwareResult = D3D12CreateDevice(
@@ -91,10 +83,10 @@ namespace UltReality::Rendering
 		ThrowIfFailed(m_d3dDevice->CheckFeatureSupport(
 			D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
 			&qualityLevels,
-			sizeof(qualityLevels)
-		));
+			sizeof(qualityLevels)));
 
-		if (qualityLevels.NumQualityLevels <= m_antiAliasingSettings.qualityLevel)
+		m_antiAliasingSettings.qualityLevel = qualityLevels.NumQualityLevels;
+		if (m_antiAliasingSettings.qualityLevel < 1)
 			return false;
 
 		return true;
@@ -223,7 +215,7 @@ namespace UltReality::Rendering
 	FORCE_INLINE void DirectX12Renderer::CreateRenderTargetView()
 	{
 		CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHeapHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart());
-		for (uint32_t i = 0; i < m_swapChainBufferCount; i++)
+		for (uint8_t i = 0; i < m_swapChainBufferCount; i++)
 		{
 			m_swapChainBuffer[i].Reset();
 
@@ -494,6 +486,14 @@ namespace UltReality::Rendering
 		m_mainWin = targetWindow.ToHWND();
 		m_gameTimer = gameTimer;
 
+#if defined(_DEBUG) or defined(DEBUG)
+		// Enable the D3D12 debug layer
+		{
+			ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&m_debugController)));
+			m_debugController->EnableDebugLayer();
+		}
+#endif
+
 		// Initialize DirectX components using m_mainWin
 		CreateDevice();
 		CreateFence();
@@ -504,9 +504,9 @@ namespace UltReality::Rendering
 
 		CreateSwapChain();
 		CreateDescriptorHeaps();
-		CreateRenderTargetView();
-		CreateDepthStencilBuffer();
-		SetViewport();
+		//CreateRenderTargetView();
+		//CreateDepthStencilBuffer();
+		//SetViewport();
 	}
 
 	void DirectX12Renderer::Render()
@@ -699,6 +699,14 @@ namespace UltReality::Rendering
 
 			FlushCommandQueue();
 
+			ThrowIfFailed(m_commandList->Reset(m_directCmdListAlloc.Get(), nullptr));
+
+			for (uint8_t i = 0; i < m_swapChainBufferCount; i++)
+			{
+				m_swapChainBuffer[i].Reset();
+			}
+			m_depthStencilBuffer.Reset();
+
 			m_swapChain->ResizeBuffers(
 				m_swapChainBufferCount,
 				m_displaySettings.width,
@@ -706,15 +714,6 @@ namespace UltReality::Rendering
 				m_backBufferFormat,
 				DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
 			);
-
-			// Recreate render target views for the new swap chain buffers
-			CreateRenderTargetView();
-
-			// Recreate the depth-stencil buffer
-			CreateDepthStencilBuffer();
-
-			// Update the viewport and scissor rect
-			SetViewport();
 		}
 
 		if (settings.mode != m_displaySettings.mode)
@@ -754,6 +753,23 @@ namespace UltReality::Rendering
 		{
 			m_displaySettings.vSync = settings.vSync;
 		}
+
+		// Recreate render target views for the new swap chain buffers
+		CreateRenderTargetView();
+
+		// Recreate the depth-stencil buffer
+		CreateDepthStencilBuffer();
+
+		// Execute the resize commands
+		ThrowIfFailed(m_commandList->Close());
+		ID3D12CommandList* cmdLists[] = { m_commandList.Get() };
+		m_commandQueue->ExecuteCommandLists(_countof(cmdLists), cmdLists);
+
+		// Wait until Resize is complete
+		FlushCommandQueue();
+
+		// Update the viewport and scissor rect
+		SetViewport();
 	}
 
 	void RENDERER_INTERFACE_CALL DirectX12Renderer::SetAntiAliasingSettings(const AntiAliasingSettings& settings)
