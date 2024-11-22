@@ -35,7 +35,7 @@ namespace UltReality::Rendering
 		ThrowIfFailed(CreateDXGIFactory1(IID_PPV_ARGS(&m_dxgiFactory)));
 
 		HRESULT hardwareResult = D3D12CreateDevice(
-			nullptr,
+			nullptr, // Default adapter
 			D3D_FEATURE_LEVEL_12_0,
 			IID_PPV_ARGS(&m_d3dDevice)
 		);
@@ -79,6 +79,7 @@ namespace UltReality::Rendering
 		qualityLevels.Format = m_backBufferFormat;
 		qualityLevels.SampleCount = sampleCount;
 		qualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
+		qualityLevels.NumQualityLevels = 0;
 
 		ThrowIfFailed(m_d3dDevice->CheckFeatureSupport(
 			D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
@@ -121,7 +122,7 @@ namespace UltReality::Rendering
 		CreateDepthStencilBuffer();
 	}
 
-	FORCE_INLINE void DirectX12Renderer::CreateCommandQueue()
+	FORCE_INLINE void DirectX12Renderer::CreateCommandObjects()
 	{
 		D3D12_COMMAND_QUEUE_DESC queueDesc = {};
 		queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
@@ -130,18 +131,12 @@ namespace UltReality::Rendering
 			&queueDesc,
 			IID_PPV_ARGS(&m_commandQueue)
 		));
-	}
 
-	FORCE_INLINE void DirectX12Renderer::CreateCommandAllocator()
-	{
 		ThrowIfFailed(m_d3dDevice->CreateCommandAllocator(
 			D3D12_COMMAND_LIST_TYPE_DIRECT,
 			IID_PPV_ARGS(m_directCmdListAlloc.GetAddressOf())
 		));
-	}
 
-	FORCE_INLINE void DirectX12Renderer::CreateCommandList()
-	{
 		ThrowIfFailed(m_d3dDevice->CreateCommandList(
 			0,
 			D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -175,7 +170,7 @@ namespace UltReality::Rendering
 		sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 		sd.BufferCount = m_swapChainBufferCount;
 		sd.OutputWindow = m_mainWin;
-		sd.Windowed = true;
+		sd.Windowed = m_displaySettings.mode == DisplaySettings::ScreenMode::Windowed;
 		sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 		sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
@@ -217,8 +212,6 @@ namespace UltReality::Rendering
 		CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHeapHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart());
 		for (uint8_t i = 0; i < m_swapChainBufferCount; i++)
 		{
-			m_swapChainBuffer[i].Reset();
-
 			ThrowIfFailed(m_swapChain->GetBuffer(
 				i, 
 				IID_PPV_ARGS(&m_swapChainBuffer[i])
@@ -233,7 +226,7 @@ namespace UltReality::Rendering
 			rtvHeapHandle.Offset(1, m_rtvDescriptorSize);
 		}
 
-		if (m_msaaEnabled)
+		/*if (m_msaaEnabled)
 		{
 			D3D12_RESOURCE_DESC msaaRenderTargetDesc = {};
 			msaaRenderTargetDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -263,13 +256,11 @@ namespace UltReality::Rendering
 			));
 
 			m_d3dDevice->CreateRenderTargetView(m_msaaRenderTarget.Get(), nullptr, m_msaaRtvHeap->GetCPUDescriptorHandleForHeapStart());
-		}
+		}*/
 	}
 
 	FORCE_INLINE void DirectX12Renderer::CreateDepthStencilBuffer()
 	{
-		m_depthStencilBuffer.Reset();
-
 		// Create the depth/stencil buffer and view
 		D3D12_RESOURCE_DESC depthStencilDesc;
 		depthStencilDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -280,7 +271,7 @@ namespace UltReality::Rendering
 		depthStencilDesc.MipLevels = 1;
 		depthStencilDesc.Format = m_depthStencilFormat;
 		depthStencilDesc.SampleDesc.Count = m_msaaEnabled ? m_msaaSampleCount : 1;
-		depthStencilDesc.SampleDesc.Quality = m_msaaEnabled ? m_msaaQualityLevel : 0;
+		depthStencilDesc.SampleDesc.Quality = m_msaaEnabled ? (m_msaaQualityLevel - 1) : 0;
 		depthStencilDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 		depthStencilDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
@@ -294,21 +285,16 @@ namespace UltReality::Rendering
 			&heapProps,
 			D3D12_HEAP_FLAG_NONE,
 			&depthStencilDesc,
-			D3D12_RESOURCE_STATE_DEPTH_WRITE,
+			D3D12_RESOURCE_STATE_COMMON,
 			&optClear,
 			IID_PPV_ARGS(m_depthStencilBuffer.GetAddressOf())
 		));
 
-		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-		dsvDesc.Format = m_depthStencilFormat;
-		dsvDesc.ViewDimension = m_msaaEnabled ? D3D12_DSV_DIMENSION_TEXTURE2DMS : D3D12_DSV_DIMENSION_TEXTURE2D;
-		dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
-
 		// Create descriptor to mip level 0 of entire resource using the format of the resource
 		m_d3dDevice->CreateDepthStencilView(
 			m_depthStencilBuffer.Get(),
-			&dsvDesc,
-			m_dsvHeap->GetCPUDescriptorHandleForHeapStart()
+			nullptr,
+			DepthStencilView()
 		);
 
 		// Transition the resource from its initial state to state so it can be used as a depth buffer
@@ -322,18 +308,14 @@ namespace UltReality::Rendering
 
 	FORCE_INLINE void DirectX12Renderer::SetViewport()
 	{
-		D3D12_VIEWPORT vp;
-		vp.TopLeftX = 0.0f;
-		vp.TopLeftY = 0.0f;
-		vp.Width = static_cast<float>(m_displaySettings.width);
-		vp.Height = static_cast<float>(m_displaySettings.height);
-		vp.MinDepth = 0.0f;
-		vp.MaxDepth = 1.0f;
+		m_screenViewport.TopLeftX = 0;
+		m_screenViewport.TopLeftY = 0;
+		m_screenViewport.Width = static_cast<float>(m_displaySettings.width);
+		m_screenViewport.Height = static_cast<float>(m_displaySettings.height);
+		m_screenViewport.MinDepth = 0.0f;
+		m_screenViewport.MaxDepth = 1.0f;
 
-		m_commandList->RSSetViewports(
-			1,
-			&vp
-		);
+		m_scissorRect = { 0,0,m_displaySettings.width, m_displaySettings.height };
 	}
 
 	/*FORCE_INLINE void DirectX12Renderer::SetScissorRectangles(D3D12_RECT* rect)
@@ -498,10 +480,21 @@ namespace UltReality::Rendering
 		CreateDevice();
 		CreateFence();
 		GetDescriptorSizes();
-		CreateCommandQueue();
-		CreateCommandAllocator();
-		CreateCommandList();
 
+		// Check MSAA
+		if (m_antiAliasingSettings.type == AntiAliasingSettings::AntiAliasingType::MSAA)
+		{
+			if (CheckMSAAQualitySupport(m_antiAliasingSettings.sampleCount))
+				m_msaaEnabled = true;
+			else
+				m_msaaEnabled = false;
+		}
+
+#if defined(DEBUG) or defined(_DEBUG)
+		LogAdapters();
+#endif
+
+		CreateCommandObjects();
 		CreateSwapChain();
 		CreateDescriptorHeaps();
 		//CreateRenderTargetView();
@@ -696,52 +689,11 @@ namespace UltReality::Rendering
 			// Update cached dimensions
 			m_displaySettings.width = settings.width;
 			m_displaySettings.height = settings.height;
-
-			FlushCommandQueue();
-
-			ThrowIfFailed(m_commandList->Reset(m_directCmdListAlloc.Get(), nullptr));
-
-			for (uint8_t i = 0; i < m_swapChainBufferCount; i++)
-			{
-				m_swapChainBuffer[i].Reset();
-			}
-			m_depthStencilBuffer.Reset();
-
-			m_swapChain->ResizeBuffers(
-				m_swapChainBufferCount,
-				m_displaySettings.width,
-				m_displaySettings.height,
-				m_backBufferFormat,
-				DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
-			);
 		}
 
 		if (settings.mode != m_displaySettings.mode)
 		{
 			m_displaySettings.mode = settings.mode;
-
-			// Handle fullscreen, borderless, or windowed mode
-			if (m_swapChain)
-			{
-				BOOL isCurrentlyFullscreen = FALSE;
-				m_swapChain->GetFullscreenState(&isCurrentlyFullscreen, nullptr);
-
-				if (m_displaySettings.mode == DisplaySettings::ScreenMode::Fullscreen && !isCurrentlyFullscreen)
-				{
-					m_swapChain->SetFullscreenState(TRUE, nullptr);
-				}
-				else if (m_displaySettings.mode != DisplaySettings::ScreenMode::Fullscreen && isCurrentlyFullscreen)
-				{
-					m_swapChain->SetFullscreenState(FALSE, nullptr);
-				}
-
-				// Borderless mode
-				if (m_displaySettings.mode == DisplaySettings::ScreenMode::Borderless)
-				{
-					SetWindowLongPtr(m_mainWin, GWL_STYLE, WS_POPUP | WS_VISIBLE);
-					SetWindowPos(m_mainWin, HWND_TOP, 0, 0, m_displaySettings.width, m_displaySettings.height, SWP_FRAMECHANGED);
-				}
-			}
 		}
 
 		if (settings.refreshRate != m_displaySettings.refreshRate)
@@ -753,6 +705,49 @@ namespace UltReality::Rendering
 		{
 			m_displaySettings.vSync = settings.vSync;
 		}
+
+		FlushCommandQueue();
+
+		ThrowIfFailed(m_commandList->Reset(m_directCmdListAlloc.Get(), nullptr));
+
+		for (uint8_t i = 0; i < m_swapChainBufferCount; i++)
+		{
+			m_swapChainBuffer[i].Reset();
+		}
+		m_depthStencilBuffer.Reset();
+
+		m_swapChain->ResizeBuffers(
+			m_swapChainBufferCount,
+			m_displaySettings.width,
+			m_displaySettings.height,
+			m_backBufferFormat,
+			DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
+		);
+
+		m_currBackBuffer = 0;
+
+		//// Handle fullscreen, borderless, or windowed mode
+		//if (m_swapChain)
+		//{
+		//	BOOL isCurrentlyFullscreen = FALSE;
+		//	m_swapChain->GetFullscreenState(&isCurrentlyFullscreen, nullptr);
+
+		//	if (m_displaySettings.mode == DisplaySettings::ScreenMode::Fullscreen && !isCurrentlyFullscreen)
+		//	{
+		//		m_swapChain->SetFullscreenState(TRUE, nullptr);
+		//	}
+		//	else if (m_displaySettings.mode != DisplaySettings::ScreenMode::Fullscreen && isCurrentlyFullscreen)
+		//	{
+		//		m_swapChain->SetFullscreenState(FALSE, nullptr);
+		//	}
+
+		//	// Borderless mode
+		//	if (m_displaySettings.mode == DisplaySettings::ScreenMode::Borderless)
+		//	{
+		//		SetWindowLongPtr(m_mainWin, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+		//		SetWindowPos(m_mainWin, HWND_TOP, 0, 0, m_displaySettings.width, m_displaySettings.height, SWP_FRAMECHANGED);
+		//	}
+		//}
 
 		// Recreate render target views for the new swap chain buffers
 		CreateRenderTargetView();

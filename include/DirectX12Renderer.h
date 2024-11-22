@@ -127,19 +127,9 @@ namespace UltReality::Rendering
 		FORCE_INLINE void RecreateMSAAResources();
 
 		/// <summary>
-		/// Creates the renderer's command queue and sets <seealso cref="m_commandQueue"/>
+		/// Creates the renderer's command queue, allocator, and command list and sets <seealso cref="m_commandQueue"/>
 		/// </summary>
-		FORCE_INLINE void CreateCommandQueue();
-
-		/// <summary>
-		/// Creates the command allocators and sets <seealso cref="m_directCmdListAlloc"/>
-		/// </summary>
-		FORCE_INLINE void CreateCommandAllocator();
-
-		/// <summary>
-		/// Creates the command list and sets <seealso cref="m_commandList"/>
-		/// </summary>
-		FORCE_INLINE void CreateCommandList();
+		FORCE_INLINE void CreateCommandObjects();
 
 		/// <summary>
 		/// Creates the swap chain and sets <seealso cref="m_swapChain"/>
