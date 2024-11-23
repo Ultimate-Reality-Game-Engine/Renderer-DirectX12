@@ -23,6 +23,18 @@
 
 namespace UltReality::Rendering
 {
+	struct DXException : public std::runtime_error
+	{
+		DXException(HRESULT hr, const std::string& fileName, uint32_t lineNumber);
+
+		const char* what() const noexcept override;
+
+		HRESULT _errorCode = S_OK;
+		std::string _fileName;
+		std::string _msg;
+		int32_t _lineNumber = -1;
+	};
+
 	/// <summary>
 	/// Class implements the <seealso cref="UltReality.Rendering.RendererInterface"/> interface using DirectX12
 	/// </summary>

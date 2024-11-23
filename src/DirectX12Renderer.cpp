@@ -20,14 +20,25 @@ namespace UltReality::Rendering
 {
 	namespace
 	{
-		FORCE_INLINE void ThrowIfFailed(HRESULT hr)
+		FORCE_INLINE void ThrowIfFailed(HRESULT hr, const char* file = __FILE__, uint32_t line = __LINE__)
 		{
 			if (FAILED(hr))
 			{
-				_com_error err(hr);
-				throw std::runtime_error(err.ErrorMessage());
+				throw DXException(hr, file, line);
 			}
 		}
+	}
+
+	DXException::DXException(HRESULT hr, const std::string& fileName, uint32_t lineNumber) : 
+		std::runtime_error("DirectX Exception"), _errorCode(hr), _fileName(fileName), _lineNumber(lineNumber)
+	{
+		_com_error err(_errorCode);
+		_msg = std::string("DirectX exception in ") + _fileName + "; line " + std::to_string(_lineNumber) + "; error: " + err.ErrorMessage();
+	}
+
+	const char* DXException::what() const noexcept
+	{
+		return _msg.c_str();
 	}
 
 	FORCE_INLINE void DirectX12Renderer::CreateDevice()
@@ -165,7 +176,7 @@ namespace UltReality::Rendering
 		sd.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 
 		sd.SampleDesc.Count = m_msaaEnabled ? m_antiAliasingSettings.sampleCount : 1;
-		sd.SampleDesc.Quality = m_msaaEnabled ? m_antiAliasingSettings.qualityLevel : 0;
+		sd.SampleDesc.Quality = m_msaaEnabled ? (m_antiAliasingSettings.qualityLevel - 1) : 0;
 
 		sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 		sd.BufferCount = m_swapChainBufferCount;
@@ -485,7 +496,7 @@ namespace UltReality::Rendering
 		if (m_antiAliasingSettings.type == AntiAliasingSettings::AntiAliasingType::MSAA)
 		{
 			if (CheckMSAAQualitySupport(m_antiAliasingSettings.sampleCount))
-				m_msaaEnabled = true;
+				m_msaaEnabled = false;
 			else
 				m_msaaEnabled = false;
 		}
