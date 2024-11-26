@@ -108,9 +108,6 @@ namespace UltReality::Rendering
 		// ComPtr to shadow map
 		Microsoft::WRL::ComPtr<ID3D12Resource> m_shadowMap;
 
-#if defined(_DEBUG) or defined(DEBUG)
-		Microsoft::WRL::ComPtr<ID3D12Debug> m_debugController;
-#endif
 		/// <summary>
 		/// Method creates the DirectX device <seealso cref="m_d3dDevice"/>
 		/// </summary>
@@ -201,7 +198,7 @@ namespace UltReality::Rendering
 
 	public:
 		DirectX12Renderer() = default;
-		~DirectX12Renderer() = default;
+		~DirectX12Renderer();
 
 		/// <summary>
 		/// Called to initialize the renderer and prepare it for rendering tasks

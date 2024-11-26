@@ -135,7 +135,7 @@ target_include_directories(DirectX12Renderer PUBLIC
 )
 
 # Link the DirectX12 Helpers, DirectX12, RendererInterface, and DXGI libraries to the target
-target_link_libraries(DirectX12Renderer PRIVATE DirectX-Headers RendererInterface ${DirectX12_LIB} ${DXGI_LIB})
+target_link_libraries(DirectX12Renderer PRIVATE DirectX-Headers RendererInterface ${DirectX12_LIB} ${DXGI_LIB} dxguid)
 
 # Set the RENDERER_INTERFACE_EXPORTS macro for DirectX12Renderer
 target_compile_definitions(DirectX12Renderer PRIVATE RENDERER_INTERFACE_EXPORTS)

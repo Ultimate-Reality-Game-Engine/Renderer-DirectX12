@@ -5,6 +5,9 @@
 
 #include <windowsx.h>
 #include <DirectXColors.h>
+#if defined(DEBUG) or defined(_DEBUG)
+#include <dxgidebug.h>
+#endif
 
 #include <DirectX12Renderer.h>
 
@@ -39,6 +42,18 @@ namespace UltReality::Rendering
 	const char* DXException::what() const noexcept
 	{
 		return _msg.c_str();
+	}
+
+	DirectX12Renderer::~DirectX12Renderer()
+	{
+		if(m_d3dDevice)
+			FlushCommandQueue();
+
+#if defined(DEBUG) or defined(_DEBUG)
+		ComPtr<IDXGIDebug> dxgiDebug;
+		ThrowIfFailed(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug)));
+		dxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_DETAIL);
+#endif
 	}
 
 	FORCE_INLINE void DirectX12Renderer::CreateDevice()
@@ -479,11 +494,17 @@ namespace UltReality::Rendering
 		m_mainWin = targetWindow.ToHWND();
 		m_gameTimer = gameTimer;
 
-#if defined(_DEBUG) or defined(DEBUG)
-		// Enable the D3D12 debug layer
+#if defined(DEBUG) || defined(_DEBUG) 
+		// Enable the D3D12 debug layer.
 		{
-			ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&m_debugController)));
-			m_debugController->EnableDebugLayer();
+			ComPtr<ID3D12Debug> debugController;
+			ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)));
+			debugController->EnableDebugLayer();
+
+			ComPtr<ID3D12Debug1> debugController1;
+			ThrowIfFailed(debugController.As(&debugController1));
+			debugController1->SetEnableGPUBasedValidation(true);
+			debugController1->SetEnableSynchronizedCommandQueueValidation(true);
 		}
 #endif
 
