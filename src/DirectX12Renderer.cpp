@@ -52,7 +52,9 @@ namespace UltReality::Rendering
 #if defined(DEBUG) or defined(_DEBUG)
 		ComPtr<IDXGIDebug> dxgiDebug;
 		ThrowIfFailed(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug)));
+#if defined(_D3DDebug_ListLiveOBJ)
 		dxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_DETAIL);
+#endif
 #endif
 	}
 
