@@ -501,10 +501,12 @@ namespace UltReality::Rendering
 			ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)));
 			debugController->EnableDebugLayer();
 
+#if defined(_D3DDebug_Verbose)
 			ComPtr<ID3D12Debug1> debugController1;
 			ThrowIfFailed(debugController.As(&debugController1));
 			debugController1->SetEnableGPUBasedValidation(true);
 			debugController1->SetEnableSynchronizedCommandQueueValidation(true);
+#endif
 		}
 #endif
 
