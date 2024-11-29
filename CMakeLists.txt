@@ -112,11 +112,11 @@ FetchContent_Declare(
 if (NOT TARGET RendererInterface)
 	# Fetch the RendererInterface library
 	FetchContent_Declare(
-		RendererInterface 
-		GIT_REPOSITORY https://github.com/Ultimate-Reality-Game-Engine/Renderer-Interface.git 
-		GIT_TAG latest
+		RenderingCore 
+		GIT_REPOSITORY https://github.com/Ultimate-Reality-Game-Engine/Rendering_Core.git 
+		GIT_TAG master
 	)
-	FetchContent_MakeAvailable(DirectX-Headers RendererInterface)
+	FetchContent_MakeAvailable(DirectX-Headers RenderingCore)
 else()
 	FetchContent_MakeAvailable(DirectX-Headers)
 endif()
