@@ -64,7 +64,7 @@
       "configurePreset": "Win-MSVC-x86_64",
       "configuration": "Debug",
       "cacheVariables": {
-        "CMAKE_CXX_FLAGS_DEBUG": "/ZI /Od /RTC1"
+        "CMAKE_CXX_FLAGS_DEBUG": "/MDd /ZI /Ob0 /Od /RTC1"
       },
       "jobs": 16
     },
