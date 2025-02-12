@@ -35,7 +35,7 @@ endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Create options that are dependent onthis project being top level
-option(RENDERER_DIRECTX12_INSTALL "Enable project install" ${PROJECT_IS_TOP_LEVEL})
+option(DIRECTX12_RENDERER_VERBOSE "Enable verbose messages for DirectX12Renderer" ${PROJECT_IS_TOP_LEVEL})
 
 include(GNUInstallDirs)
 
@@ -119,42 +119,42 @@ endif()
 file(GLOB_RECURSE DirectX12Renderer_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 if(DirectX12Renderer_SOURCE)
-# Add DirectX12 Renderer library target
-add_library(DirectX12Renderer SHARED ${DirectX12Renderer_SOURCE})
+	# Add DirectX12 Renderer library target
+	add_library(DirectX12Renderer SHARED ${DirectX12Renderer_SOURCE})
 
-# Connect the Renderers headers to the library
-target_include_directories(DirectX12Renderer PUBLIC 
-	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> 
- 	$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> # This is used when the library is installed
-)
+	# Connect the Renderers headers to the library
+	target_include_directories(DirectX12Renderer PUBLIC 
+		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> 
+ 		$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> # This is used when the library is installed
+	)
 
-# Link the DirectX12 Helpers, DirectX12, RendererInterface, and DXGI libraries to the target
-target_link_libraries(DirectX12Renderer PRIVATE DirectX-Headers RendererInterface ${DirectX12_LIB} ${DXGI_LIB} dxguid)
+	# Link the DirectX12 Helpers, DirectX12, RendererInterface, and DXGI libraries to the target
+	target_link_libraries(DirectX12Renderer PRIVATE DirectX-Headers RendererInterface ${DirectX12_LIB} ${DXGI_LIB} dxguid)
 
-# Set the RENDERER_INTERFACE_EXPORTS macro for DirectX12Renderer
-target_compile_definitions(DirectX12Renderer PRIVATE RENDERER_INTERFACE_EXPORTS)
+	# Set the RENDERER_INTERFACE_EXPORTS macro for DirectX12Renderer
+	target_compile_definitions(DirectX12Renderer PRIVATE RENDERER_INTERFACE_EXPORTS)
 
-# Get properties from the RendererInterface library
-get_target_property(RendererInterface_VERSION RendererInterface VERSION)
-get_target_property(RendererInterface_SOVERSION RendererInterface SOVERSION)
+	# Get properties from the RendererInterface library
+	get_target_property(RendererInterface_VERSION RendererInterface VERSION)
+	get_target_property(RendererInterface_SOVERSION RendererInterface SOVERSION)
 
-if(${RendererInterface_SOVERSION} GREATER ${PROJECT_VERSION_MAJOR})
-	message(SEND_ERROR "DirectX12Renderer must be updated to match the newer major version of RendererInterface\nRendererInterface at version ${RendererInterface_VERSION}\nDirectX12Renderer at version ${PROJECT_VERSION}")
-elseif(${PROJECT_IS_TOP_LEVEL})
-	message(STATUS "RendererInterface at version ${RendererInterface_VERSION}\n-- DirectX12Renderer at version ${PROJECT_VERSION}")
-endif()
+	if(${RendererInterface_SOVERSION} GREATER ${PROJECT_VERSION_MAJOR})
+		message(SEND_ERROR "DirectX12Renderer must be updated to match the newer major version of RendererInterface\n-- RendererInterface at version ${RendererInterface_VERSION}\n-- DirectX12Renderer at version ${PROJECT_VERSION}")
+	elseif(DIRECTX12_RENDERER_VERBOSE)
+		message(STATUS "RendererInterface at version ${RendererInterface_VERSION}\n-- DirectX12Renderer at version ${PROJECT_VERSION}")
+	endif()
 
-set_target_properties(DirectX12Renderer PROPERTIES 
-	VERSION ${PROJECT_VERSION} 
-	SOVERSION ${PROJECT_VERSION_MAJOR}
-)
+	set_target_properties(DirectX12Renderer PROPERTIES 
+		VERSION ${PROJECT_VERSION} 
+		SOVERSION ${PROJECT_VERSION_MAJOR}
+	)
 
 # End Target Creation *****************************************************************************
 #**************************************************************************************************
 
 # Installation and Packing Configuration **********************************************************
 #**************************************************************************************************
-if(RENDERER_DIRECTX12_INSTALL)
+
 	# Install the targets
 	install(
 		TARGETS DirectX12Renderer 
@@ -229,11 +229,10 @@ if(RENDERER_DIRECTX12_INSTALL)
 	set(CPACK_PACKAGE_VENDOR "Andrew Todd")
 	set(CPACK_PACKAGE_CONTACT "andrewdanieltodd@gmail.com")
 	include(CPack)
-	if(${PROJECT_IS_TOP_LEVEL})
+	if(DIRECTX12_RENDERER_VERBOSE)
 		message(STATUS "PACKAGE_VERSION is: ${PACKAGE_VERSION}")
 		message(STATUS "PACKAGE_FILE_NAME is: ${CPACK_PACKAGE_FILE_NAME}")
 	endif()
-endif()
 endif()
 
 # End Installation and Packing Configuration ******************************************************
