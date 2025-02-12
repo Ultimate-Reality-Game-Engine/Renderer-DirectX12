@@ -173,7 +173,7 @@ if(DirectX12Renderer_SOURCE)
 		EXPORT DirectX12Renderer_Targets 
 		FILE DirectX12Renderer_Targets.cmake 
 		NAMESPACE UltReality::Rendering:: 
-		DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/DirectX12Renderer/cmake
+		DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/cmake/DirectX12Renderer
 	)
 
 	# Install the actual includes
@@ -192,14 +192,14 @@ if(DirectX12Renderer_SOURCE)
 	configure_package_config_file(
 		"${CMAKE_CURRENT_SOURCE_DIR}/cmake_config/DirectX12Renderer_Config.cmake.in" 
 		"${CMAKE_CURRENT_BINARY_DIR}/DirectX12Renderer_Config.cmake" 
-		INSTALL_DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/DirectX12Renderer/cmake
+		INSTALL_DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/cmake/DirectX12Renderer
 	)
 
 	# Install the CMake config files
 	install(
 		FILES "${CMAKE_CURRENT_BINARY_DIR}/DirectX12Renderer_ConfigVersion.cmake" 
 		"${CMAKE_CURRENT_BINARY_DIR}/DirectX12Renderer_Config.cmake" 
-		DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/DirectX12Renderer/cmake
+		DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/cmake/DirectX12Renderer
 	)
 
 	# Define Package install paths
