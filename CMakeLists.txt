@@ -37,6 +37,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Create options that are dependent onthis project being top level
 option(DIRECTX12_RENDERER_VERBOSE "Enable verbose messages for DirectX12Renderer" ${PROJECT_IS_TOP_LEVEL})
 
+message(STATUS "DIRECTX12_RENDERER_VERBOSE: ${DIRECTX12_RENDERER_VERBOSE}")
+
 include(GNUInstallDirs)
 
 # End CMake configuration and settings ************************************************************
