@@ -140,8 +140,8 @@ get_target_property(RendererInterface_SOVERSION RendererInterface SOVERSION)
 
 if(${RendererInterface_SOVERSION} GREATER ${PROJECT_VERSION_MAJOR})
 	message(SEND_ERROR "DirectX12Renderer must be updated to match the newer major version of RendererInterface\nRendererInterface at version ${RendererInterface_VERSION}\nDirectX12Renderer at version ${PROJECT_VERSION}")
-else()
-	message(STATUS "RendererInterface at version ${RendererInterface_VERSION}\nDirectX12Renderer at version ${PROJECT_VERSION}")
+elseif(${PROJECT_IS_TOP_LEVEL})
+	message(STATUS "RendererInterface at version ${RendererInterface_VERSION}\n-- DirectX12Renderer at version ${PROJECT_VERSION}")
 endif()
 
 set_target_properties(DirectX12Renderer PROPERTIES 
@@ -229,8 +229,10 @@ if(RENDERER_DIRECTX12_INSTALL)
 	set(CPACK_PACKAGE_VENDOR "Andrew Todd")
 	set(CPACK_PACKAGE_CONTACT "andrewdanieltodd@gmail.com")
 	include(CPack)
-	message(STATUS "PACKAGE_VERSION is: ${PACKAGE_VERSION}")
-	message(STATUS "PACKAGE_FILE_NAME is: ${CPACK_PACKAGE_FILE_NAME}")
+	if(${PROJECT_IS_TOP_LEVEL})
+		message(STATUS "PACKAGE_VERSION is: ${PACKAGE_VERSION}")
+		message(STATUS "PACKAGE_FILE_NAME is: ${CPACK_PACKAGE_FILE_NAME}")
+	endif()
 endif()
 endif()
 
