@@ -1,19 +1,18 @@
 #include <directx/d3dx12.h>
 
-#include <stdexcept>
-#include <comdef.h>
-
-#include <windowsx.h>
 #include <DirectXColors.h>
 #if defined(DEBUG) or defined(_DEBUG)
 #include <dxgidebug.h>
 #endif
 
-#include <DirectX12Renderer.h>
+#include <D3D12Renderer.h>
+#include <D3D12Utilities.h>
+#include <D3DException.h>
 
 using namespace Microsoft::WRL;
 using namespace UltReality::Utilities;
 using namespace DirectX;
+using namespace UltReality::Rendering::D3D12;
 
 #ifndef ReleaseCom
 #define ReleaseCom(x) { if(x){ x->Release(); x = 0; } }
@@ -21,30 +20,7 @@ using namespace DirectX;
 
 namespace UltReality::Rendering
 {
-	namespace
-	{
-		FORCE_INLINE void ThrowIfFailed(HRESULT hr, const char* file = __FILE__, uint32_t line = __LINE__)
-		{
-			if (FAILED(hr))
-			{
-				throw DXException(hr, file, line);
-			}
-		}
-	}
-
-	DXException::DXException(HRESULT hr, const std::string& fileName, uint32_t lineNumber) : 
-		std::runtime_error("DirectX Exception"), _errorCode(hr), _fileName(fileName), _lineNumber(lineNumber)
-	{
-		_com_error err(_errorCode);
-		_msg = std::string("DirectX exception in ") + _fileName + "; line " + std::to_string(_lineNumber) + "; error: " + err.ErrorMessage();
-	}
-
-	const char* DXException::what() const noexcept
-	{
-		return _msg.c_str();
-	}
-
-	DirectX12Renderer::~DirectX12Renderer()
+	D3D12Renderer::~D3D12Renderer()
 	{
 		if(m_d3dDevice)
 			FlushCommandQueue();
@@ -58,7 +34,7 @@ namespace UltReality::Rendering
 #endif
 	}
 
-	FORCE_INLINE void DirectX12Renderer::CreateDevice()
+	FORCE_INLINE void D3D12Renderer::CreateDevice()
 	{
 		ThrowIfFailed(CreateDXGIFactory1(IID_PPV_ARGS(&m_dxgiFactory)));
 
@@ -82,14 +58,14 @@ namespace UltReality::Rendering
 		}
 	}
 
-	FORCE_INLINE void DirectX12Renderer::CreateFence()
+	FORCE_INLINE void D3D12Renderer::CreateFence()
 	{
 		ThrowIfFailed(m_d3dDevice->CreateFence(
 			0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)
 		));
 	}
 
-	FORCE_INLINE void DirectX12Renderer::GetDescriptorSizes()
+	FORCE_INLINE void D3D12Renderer::GetDescriptorSizes()
 	{
 		m_rtvDescriptorSize = m_d3dDevice->GetDescriptorHandleIncrementSize(
 			D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -101,7 +77,7 @@ namespace UltReality::Rendering
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	}
 
-	FORCE_INLINE bool DirectX12Renderer::CheckMSAAQualitySupport(const uint32_t sampleCount)
+	FORCE_INLINE bool D3D12Renderer::CheckMSAAQualitySupport(const uint32_t sampleCount)
 	{
 		D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
 		qualityLevels.Format = m_backBufferFormat;
@@ -121,7 +97,7 @@ namespace UltReality::Rendering
 		return true;
 	}
 
-	FORCE_INLINE void DirectX12Renderer::ConfigureMSAA()
+	FORCE_INLINE void D3D12Renderer::ConfigureMSAA()
 	{
 		if (CheckMSAAQualitySupport(m_antiAliasingSettings.sampleCount))
 		{
@@ -133,7 +109,7 @@ namespace UltReality::Rendering
 		}
 	}
 
-	FORCE_INLINE void DirectX12Renderer::DisableMSAA()
+	FORCE_INLINE void D3D12Renderer::DisableMSAA()
 	{
 		m_msaaEnabled = false;
 		m_msaaSampleCount = 1;
@@ -142,7 +118,7 @@ namespace UltReality::Rendering
 		RecreateMSAAResources();
 	}
 
-	FORCE_INLINE void DirectX12Renderer::RecreateMSAAResources()
+	FORCE_INLINE void D3D12Renderer::RecreateMSAAResources()
 	{
 		FlushCommandQueue();
 
@@ -150,7 +126,7 @@ namespace UltReality::Rendering
 		CreateDepthStencilBuffer();
 	}
 
-	FORCE_INLINE void DirectX12Renderer::CreateCommandObjects()
+	FORCE_INLINE void D3D12Renderer::CreateCommandObjects()
 	{
 		D3D12_COMMAND_QUEUE_DESC queueDesc = {};
 		queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
@@ -179,7 +155,7 @@ namespace UltReality::Rendering
 		m_commandList->Close();
 	}
 
-	FORCE_INLINE void DirectX12Renderer::CreateSwapChain()
+	FORCE_INLINE void D3D12Renderer::CreateSwapChain()
 	{
 		// Release the previous swapchain we will be recreating
 		m_swapChain.Reset();
@@ -210,7 +186,7 @@ namespace UltReality::Rendering
 		));
 	}
 
-	FORCE_INLINE void DirectX12Renderer::CreateDescriptorHeaps()
+	FORCE_INLINE void D3D12Renderer::CreateDescriptorHeaps()
 	{
 		D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc;
 		rtvHeapDesc.NumDescriptors = m_swapChainBufferCount;
@@ -235,7 +211,7 @@ namespace UltReality::Rendering
 		));
 	}
 
-	FORCE_INLINE void DirectX12Renderer::CreateRenderTargetView()
+	FORCE_INLINE void D3D12Renderer::CreateRenderTargetView()
 	{
 		CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHeapHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart());
 		for (uint8_t i = 0; i < m_swapChainBufferCount; i++)
@@ -287,7 +263,7 @@ namespace UltReality::Rendering
 		}*/
 	}
 
-	FORCE_INLINE void DirectX12Renderer::CreateDepthStencilBuffer()
+	FORCE_INLINE void D3D12Renderer::CreateDepthStencilBuffer()
 	{
 		// Create the depth/stencil buffer and view
 		D3D12_RESOURCE_DESC depthStencilDesc;
@@ -334,7 +310,7 @@ namespace UltReality::Rendering
 		m_commandList->ResourceBarrier(1, &barrier);
 	}
 
-	FORCE_INLINE void DirectX12Renderer::SetViewport()
+	FORCE_INLINE void D3D12Renderer::SetViewport()
 	{
 		m_screenViewport.TopLeftX = 0;
 		m_screenViewport.TopLeftY = 0;
@@ -346,12 +322,12 @@ namespace UltReality::Rendering
 		m_scissorRect = { 0,0,m_displaySettings.width, m_displaySettings.height };
 	}
 
-	/*FORCE_INLINE void DirectX12Renderer::SetScissorRectangles(D3D12_RECT* rect)
+	/*FORCE_INLINE void D3D12Renderer::SetScissorRectangles(D3D12_RECT* rect)
 	{
 		m_commandList->RSSetScissorRects(1, rect);
 	}*/
 
-	FORCE_INLINE void DirectX12Renderer::UpdateSamplerDescriptor()
+	FORCE_INLINE void D3D12Renderer::UpdateSamplerDescriptor()
 	{
 		D3D12_SAMPLER_DESC samplerDesc = {};
 		samplerDesc.Filter = (m_textureSettings.filteringLevel > 4) ? D3D12_FILTER_ANISOTROPIC : D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -367,7 +343,7 @@ namespace UltReality::Rendering
 		m_d3dDevice->CreateSampler(&samplerDesc, samplerHandle);
 	}
 
-	FORCE_INLINE void DirectX12Renderer::UpdateTextureQuality()
+	FORCE_INLINE void D3D12Renderer::UpdateTextureQuality()
 	{
 		// Adjust texture resolution scale based on quality setting
 		float resolutionScale;
@@ -394,7 +370,7 @@ namespace UltReality::Rendering
 		//RecreateTextures(resolutionScale);
 	}
 
-	FORCE_INLINE void DirectX12Renderer::UpdateMipmapping()
+	FORCE_INLINE void D3D12Renderer::UpdateMipmapping()
 	{
 		// Recreate textures with or without mipmaps
 		/*for (auto& texture : m_loadedTextures)
@@ -403,7 +379,7 @@ namespace UltReality::Rendering
 		}*/
 	}
 
-	FORCE_INLINE void DirectX12Renderer::UpdateShadowQuality()
+	FORCE_INLINE void D3D12Renderer::UpdateShadowQuality()
 	{
 		switch (m_shadowSettings.quality)
 		{
@@ -429,7 +405,7 @@ namespace UltReality::Rendering
 		}
 	}
 
-	FORCE_INLINE void DirectX12Renderer::RecreateShadowMap()
+	FORCE_INLINE void D3D12Renderer::RecreateShadowMap()
 	{
 		// Release the old shadow map
 		m_shadowMap.Reset();
@@ -466,17 +442,17 @@ namespace UltReality::Rendering
 		m_d3dDevice->CreateDepthStencilView(m_shadowMap.Get(), &dsvDesc, m_shadowMapHeap->GetCPUDescriptorHandleForHeapStart());
 	}
 
-	FORCE_INLINE void DirectX12Renderer::UpdateSoftShadowsState()
+	FORCE_INLINE void D3D12Renderer::UpdateSoftShadowsState()
 	{
 
 	}
 
-	FORCE_INLINE ID3D12Resource* DirectX12Renderer::CurrentBackBuffer() const
+	FORCE_INLINE ID3D12Resource* D3D12Renderer::CurrentBackBuffer() const
 	{
 		return m_swapChainBuffer[m_currBackBuffer].Get();
 	}
 
-	FORCE_INLINE D3D12_CPU_DESCRIPTOR_HANDLE DirectX12Renderer::CurrentBackBufferView() const
+	FORCE_INLINE D3D12_CPU_DESCRIPTOR_HANDLE D3D12Renderer::CurrentBackBufferView() const
 	{
 		return CD3DX12_CPU_DESCRIPTOR_HANDLE(
 			m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), // handle start 
@@ -485,12 +461,12 @@ namespace UltReality::Rendering
 		);
 	}
 
-	FORCE_INLINE D3D12_CPU_DESCRIPTOR_HANDLE DirectX12Renderer::DepthStencilView() const
+	FORCE_INLINE D3D12_CPU_DESCRIPTOR_HANDLE D3D12Renderer::DepthStencilView() const
 	{
 		return m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
 	}
 
-	void DirectX12Renderer::Initialize(DisplayTarget targetWindow, const GameTimer* gameTimer)
+	void D3D12Renderer::Initialize(DisplayTarget targetWindow, const GameTimer* gameTimer)
 	{
 		// cache a reference to the target window
 		m_mainWin = targetWindow.ToHWND();
@@ -538,7 +514,7 @@ namespace UltReality::Rendering
 		//SetViewport();
 	}
 
-	void DirectX12Renderer::Render()
+	void D3D12Renderer::Render()
 	{
 		// Reuse the memory associated with the command recording
 		// We can only reset when the associated command list have finished
@@ -585,7 +561,7 @@ namespace UltReality::Rendering
 		m_commandQueue->ExecuteCommandLists(_countof(cmdLists), cmdLists);
 	}
 
-	void DirectX12Renderer::Present()
+	void D3D12Renderer::Present()
 	{
 		// Swap the back and front buffers
 		ThrowIfFailed(m_swapChain->Present(0, 0));
@@ -597,7 +573,7 @@ namespace UltReality::Rendering
 		FlushCommandQueue();
 	}
 
-	void DirectX12Renderer::FlushCommandQueue()
+	void D3D12Renderer::FlushCommandQueue()
 	{
 		// Advance the fence value to mark commands up to this fence point.
 		m_currentFence++;
@@ -621,7 +597,7 @@ namespace UltReality::Rendering
 		}
 	}
 
-	void DirectX12Renderer::CalculateFrameStats(FrameStats* fs)
+	void D3D12Renderer::CalculateFrameStats(FrameStats* fs)
 	{
 		// Code computes the average frames per second, and also the 
 		// average time it takes to render one frame.  These stats 
@@ -644,7 +620,7 @@ namespace UltReality::Rendering
 		}
 	}
 
-	void DirectX12Renderer::LogAdapters()
+	void D3D12Renderer::LogAdapters()
 	{
 		UINT i = 0;
 		IDXGIAdapter* adapter = nullptr;
@@ -672,7 +648,7 @@ namespace UltReality::Rendering
 		}
 	}
 
-	void DirectX12Renderer::LogAdapterOutputs(IDXGIAdapter* adapter)
+	void D3D12Renderer::LogAdapterOutputs(IDXGIAdapter* adapter)
 	{
 		UINT i = 0;
 		IDXGIOutput* output = nullptr;
@@ -694,7 +670,7 @@ namespace UltReality::Rendering
 		}
 	}
 
-	void DirectX12Renderer::LogOutputDisplayModes(IDXGIOutput* output, DXGI_FORMAT format)
+	void D3D12Renderer::LogOutputDisplayModes(IDXGIOutput* output, DXGI_FORMAT format)
 	{
 		UINT count = 0;
 		UINT flags = 0;
@@ -718,7 +694,7 @@ namespace UltReality::Rendering
 		}
 	}
 
-	void RENDERER_INTERFACE_CALL DirectX12Renderer::SetDisplaySettings(const DisplaySettings& settings)
+	void RENDERER_INTERFACE_CALL D3D12Renderer::SetDisplaySettings(const DisplaySettings& settings)
 	{
 		if (settings.width != m_displaySettings.width || settings.height != m_displaySettings.height)
 		{
@@ -803,7 +779,7 @@ namespace UltReality::Rendering
 		SetViewport();
 	}
 
-	void RENDERER_INTERFACE_CALL DirectX12Renderer::SetAntiAliasingSettings(const AntiAliasingSettings& settings)
+	void RENDERER_INTERFACE_CALL D3D12Renderer::SetAntiAliasingSettings(const AntiAliasingSettings& settings)
 	{
 		m_antiAliasingSettings.sampleCount = settings.sampleCount;
 		m_antiAliasingSettings.qualityLevel = settings.qualityLevel;
@@ -825,7 +801,7 @@ namespace UltReality::Rendering
 		}
 	}
 
-	void RENDERER_INTERFACE_CALL DirectX12Renderer::SetTextureSettings(const TextureSettings& settings)
+	void RENDERER_INTERFACE_CALL D3D12Renderer::SetTextureSettings(const TextureSettings& settings)
 	{
 		// Check and apply filtering level changes
 		if (settings.filteringLevel != m_textureSettings.filteringLevel)
@@ -855,7 +831,7 @@ namespace UltReality::Rendering
 		}
 	}
 
-	void RENDERER_INTERFACE_CALL DirectX12Renderer::SetShadowSettings(const ShadowSettings& settings)
+	void RENDERER_INTERFACE_CALL D3D12Renderer::SetShadowSettings(const ShadowSettings& settings)
 	{
 		// Check and apply shadow quality changes
 		if (settings.quality != m_shadowSettings.quality)
@@ -889,7 +865,7 @@ namespace UltReality::Rendering
 	/// Method to set the lighting settings for the renderers
 	/// </summary>
 	/// <param name="settings">Instance of <seealso cref="UltReality.Rendering.LightingSettings"/> struct to get settings from</param>
-	void RENDERER_INTERFACE_CALL DirectX12Renderer::SetLightingSettings(const LightingSettings& settings)
+	void RENDERER_INTERFACE_CALL D3D12Renderer::SetLightingSettings(const LightingSettings& settings)
 	{
 
 	}
@@ -898,7 +874,7 @@ namespace UltReality::Rendering
 	/// Method to set the post-processing settings for the renderer
 	/// </summary>
 	/// <param name="settings">Instance of <seealso cref="UltReality.Rendering.PostProcessingSettings"/> struct to get settings from</param>
-	void RENDERER_INTERFACE_CALL DirectX12Renderer::SetPostProcessingSettings(const PostProcessingSettings& settings)
+	void RENDERER_INTERFACE_CALL D3D12Renderer::SetPostProcessingSettings(const PostProcessingSettings& settings)
 	{
 
 	}
@@ -907,7 +883,7 @@ namespace UltReality::Rendering
 	/// Method to set the performance related settings for the renderer
 	/// </summary>
 	/// <param name="settings">Instance of <seealso cref="UltReality.Rendering.PerformanceSettings"/> struct to get settings from</param>
-	void RENDERER_INTERFACE_CALL DirectX12Renderer::SetPerformanceSettings(const PerformanceSettings& settings)
+	void RENDERER_INTERFACE_CALL D3D12Renderer::SetPerformanceSettings(const PerformanceSettings& settings)
 	{
 
 	}

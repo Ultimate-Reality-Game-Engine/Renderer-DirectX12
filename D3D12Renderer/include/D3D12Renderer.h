@@ -1,5 +1,5 @@
-#ifndef ULTREALITY_RENDERING_DIRECTX12_RENDERER_H
-#define ULTREALITY_RENDERING_DIRECTX12_RENDERER_H
+#ifndef ULTREALITY_RENDERING_D3D12_RENDERER_H
+#define ULTREALITY_RENDERING_D3D12_RENDERER_H
 
 #include <windows.h>
 #include <wrl.h>
@@ -23,22 +23,10 @@
 
 namespace UltReality::Rendering
 {
-	struct DXException : public std::runtime_error
-	{
-		DXException(HRESULT hr, const std::string& fileName, uint32_t lineNumber);
-
-		const char* what() const noexcept override;
-
-		HRESULT _errorCode = S_OK;
-		std::string _fileName;
-		std::string _msg;
-		int32_t _lineNumber = -1;
-	};
-
 	/// <summary>
-	/// Class implements the <seealso cref="UltReality.Rendering.RendererInterface"/> interface using DirectX12
+	/// Class implements the <see cref="IRenderer"/> interface using DirectX12
 	/// </summary>
-	class RENDERER_INTERFACE_ABI DirectX12Renderer : public IRenderer
+	class RENDERER_INTERFACE_ABI D3D12Renderer : public IRenderer
 	{
 	private:
 		// Windows specific handle to a Windows window instance for this application. Render target for DirectX
@@ -197,8 +185,8 @@ namespace UltReality::Rendering
 		void LogOutputDisplayModes(IDXGIOutput* output, DXGI_FORMAT format);
 
 	public:
-		DirectX12Renderer() = default;
-		~DirectX12Renderer();
+		D3D12Renderer() = default;
+		~D3D12Renderer();
 
 		/// <summary>
 		/// Called to initialize the renderer and prepare it for rendering tasks
@@ -280,4 +268,4 @@ namespace UltReality::Rendering
 	};
 }
 
-#endif // !ULTREALITY_RENDERING_DIRECTX12_RENDERER_H
+#endif // !ULTREALITY_RENDERING_D3D12_RENDERER_H
