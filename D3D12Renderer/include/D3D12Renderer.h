@@ -2,7 +2,6 @@
 #define ULTREALITY_RENDERING_D3D12_RENDERER_H
 
 #include <windows.h>
-#include <wrl.h>
 #include <d3d12.h>
 #include <dxgi1_4.h>
 
@@ -11,7 +10,6 @@
 #include <IRenderer.h>
 #include <DisplayTarget.h>
 #include <PlatformMessageHandler.h>
-#include <GameTimer.h>
 
 #if defined(__GNUC__) or defined(__clang__)
 #define FORCE_INLINE inline __attribute__((always_inline))
@@ -29,72 +27,12 @@ namespace UltReality::Rendering
 	class RENDERER_INTERFACE_ABI D3D12Renderer : public IRenderer
 	{
 	private:
-		// Windows specific handle to a Windows window instance for this application. Render target for DirectX
-		HWND m_mainWin = nullptr;
-
-		const UltReality::Utilities::GameTimer* m_gameTimer = nullptr;
-
 		// Render Target View descriptor size
 		uint32_t m_rtvDescriptorSize;
 		// Depth Stencil View descriptor size
 		uint32_t m_dsvDescriptorSize;
 		// 
 		uint32_t m_cbvSrvDescriptorSize;
-
-		D3D12_VIEWPORT m_screenViewport;
-		D3D12_RECT m_scissorRect;
-
-		bool m_msaaEnabled = false;
-		uint8_t m_msaaSampleCount = 1;
-		uint8_t m_msaaQualityLevel = 0;
-
-		float m_shadowBias = 0.005f;
-		uint8_t m_shadowSampleCount = 4;
-		
-		// Format of the texels in the swap chain (back buffer)
-		DXGI_FORMAT m_backBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-		// Static value for the number of render targets in our swap chain (2 for double buffering)
-		static constexpr uint8_t m_swapChainBufferCount = 2;
-		// Variable tracks which index in the swap chain we are currently rendering to (back buffer)
-		uint8_t m_currBackBuffer = 0;
-
-		// Format of the texels in the depth stencil buffers
-		DXGI_FORMAT m_depthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-
-		uint64_t m_currentFence = 0;
-
-		// ComPtr to the DirectX device
-		Microsoft::WRL::ComPtr<ID3D12Device> m_d3dDevice;
-		// ComPtr to a DXGI Factory object. Used to create DirectX objects and structs
-		Microsoft::WRL::ComPtr<IDXGIFactory4> m_dxgiFactory;
-		// ComPtr to Pipeline fence object
-		Microsoft::WRL::ComPtr<ID3D12Fence> m_fence;
-		// ComPtr to the renderer's command queue. Items submitted to command queue are submitted as soon as possible
-		Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_commandQueue;
-		// ComPtr to an allocator used to create commands for the command list
-		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_directCmdListAlloc;
-		// ComPtr to renderer's command list. Items submitted to command list are pooled until explicitly executed. Can be used to create reusable sequence of commands for repeated submission
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_commandList;
-		// ComPtr to the renderer's swap chain. Corresponds to buffer on hardware (device)
-		Microsoft::WRL::ComPtr<IDXGISwapChain> m_swapChain;
-		// ComPtr to descriptors for render target views in the swap chain
-		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
-		// ComPtr to descriptor for the depth stencil view
-		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_dsvHeap;
-		// Array of ComPtr to the render target buffers in the swap chain
-		Microsoft::WRL::ComPtr<ID3D12Resource> m_swapChainBuffer[m_swapChainBufferCount];
-		// ComPtr to the depth stencil view buffer
-		Microsoft::WRL::ComPtr<ID3D12Resource> m_depthStencilBuffer;
-		// ComPtr to descriptors for render msaa render target view
-		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_msaaRtvHeap;
-		// ComPtr to the msaa render target view
-		Microsoft::WRL::ComPtr<ID3D12Resource> m_msaaRenderTarget;
-		// ComPtr to descriptors for texture samplers
-		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_samplerHeap;
-		// ComPtr to descriptor heap for shadow map
-		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_shadowMapHeap;
-		// ComPtr to shadow map
-		Microsoft::WRL::ComPtr<ID3D12Resource> m_shadowMap;
 
 		/// <summary>
 		/// Method creates the DirectX device <seealso cref="m_d3dDevice"/>

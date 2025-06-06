@@ -20,6 +20,16 @@ using namespace UltReality::Rendering::D3D12;
 
 namespace UltReality::Rendering
 {
+	namespace
+	{
+		class NotImplementedException : public std::logic_error
+		{
+		public:
+			NotImplementedException() : std::logic_error("Function not yet implemented")
+			{}
+		};
+	}
+
 	D3D12Renderer::~D3D12Renderer()
 	{
 		if(m_d3dDevice)
